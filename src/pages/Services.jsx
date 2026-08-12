@@ -4,6 +4,7 @@ import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtMoney } from '../components/ui';
+import { Pagination } from '../components/Pagination';
 
 const empty = { name: '', price: '' };
 
@@ -16,12 +17,16 @@ export default function Services() {
   const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [pagination, setPagination] = useState(null);
 
   const load = () => {
     setFailed(false);
-    api.get('/services').then((r) => setRows(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
+    const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+    api.get(`/services?${params}`).then((r) => { setRows(r.data.items); setPagination(r.data.pagination); }).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page]);
 
   const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.name]);
 
@@ -105,6 +110,15 @@ export default function Services() {
           </table>
           {!filtered.length && <EmptyState title={q ? 'Sin coincidencias' : 'No hay servicios'} hint={q ? 'Prueba con otro término' : 'Agrega tu primer servicio'} />}
         </div>
+        {pagination && pagination.total_pages > 1 && (
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.total_pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       <Modal

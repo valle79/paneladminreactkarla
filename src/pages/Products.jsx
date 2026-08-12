@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, Loader, EmptyState, ErrorState, ImageCell, PdfLink, fmtMoney, fmtDate } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
+import { Pagination } from '../components/Pagination';
 
 const empty = {
   name: '', description: '', price: '', image_url: null, pdf_url: null,
@@ -13,26 +14,36 @@ const empty = {
 
 const parseJson = (v, fallback) => {
   if (v == null || v === '') return fallback;
+  if (typeof v !== 'string') return v ?? fallback;
   try { const p = JSON.parse(v); return p ?? fallback; } catch { return fallback; }
 };
 
 export default function Products() {
   const toast = useToast();
   const { ask, ConfirmDialog } = useConfirm();
-  const [rows, setRows] = useState(null);
+  const [data, setData] = useState(null);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(empty);
   const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
 
   const load = () => {
     setFailed(false);
-    api.get('/products').then((r) => setRows(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString()
+    });
+    api.get(`/products?${params}`).then((r) => setData(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page]);
 
-  const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.name, (r) => r.description]);
+  const rows = data?.items || [];
+  const pagination = data?.pagination;
+
+  const { q, setQ, filtered } = useSearch(rows, [(r) => r.name, (r) => r.description]);
 
   const openAdd = () => { setEditingId(null); setForm(empty); setModal(true); };
   const openEdit = (r) => {
@@ -96,7 +107,7 @@ export default function Products() {
     } catch (e) { toast.error(errMsg(e)); }
   };
 
-  if (!rows) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar los productos" /> : <Loader text="Cargando productos..." />;
+  if (!data) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar los productos" /> : <Loader text="Cargando productos..." />;
 
   const specs = form.specifications;
   const dim = form.dimensions;
@@ -158,6 +169,15 @@ export default function Products() {
           </table>
           {!filtered.length && <EmptyState title={q ? 'Sin coincidencias' : 'No hay productos'} hint={q ? 'Prueba con otro término' : 'Agrega tu primer producto'} />}
         </div>
+        {pagination && pagination.total_pages > 1 && (
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.total_pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       <Modal

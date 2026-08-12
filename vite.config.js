@@ -6,8 +6,16 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8000',
-      '/uploads': 'http://localhost:8000',
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        agent: new (await import('node:http')).Agent({ keepAlive: true, maxSockets: 64 }),
+      },
+      '/uploads': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        agent: new (await import('node:http')).Agent({ keepAlive: true, maxSockets: 64 }),
+      },
     },
   },
 });

@@ -11,6 +11,7 @@ import {
   Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtMoney, fmtDateTime,
   StatusBadge, DocTypeBadge, InvoiceBadge,
 } from '../components/ui';
+import { Pagination } from '../components/Pagination';
 
 const emptySale = {
   client_type: 'dni',
@@ -49,12 +50,16 @@ export default function Sales() {
   const [preview, setPreview] = useState(null);
   const [specIdx, setSpecIdx] = useState(null);
   const [specForm, setSpecForm] = useState({ description: '', specifications: [], features: [] });
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [pagination, setPagination] = useState(null);
 
   const load = () => {
     setFailed(false);
-    api.get('/sales').then((r) => setRows(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
+    const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+    api.get(`/sales?${params}`).then((r) => { setRows(r.data.items); setPagination(r.data.pagination); }).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page]);
 
   const isProformaLike = form.invoice_type === 'proforma' || form.invoice_type === 'cotizacion';
 
@@ -94,7 +99,7 @@ export default function Sales() {
     return true;
   };
 
-  const openPreview = () => {
+  const openPreview = async () => {
     if (!validate()) return;
     const payload = buildPayload();
     const client = (form.client_type === 'dni' ? cats?.clients : cats?.ruc || []).find((c) => String(c.id) === String(form.client_id));
@@ -102,10 +107,15 @@ export default function Sales() {
 
     let displayNumber = form.invoice_number || null;
     if (isProformaLike && !displayNumber) {
-      const maxN = (rows || [])
-        .filter((s) => s.invoice_type === form.invoice_type)
-        .reduce((m, s) => Math.max(m, Number(s.invoice_number) || 0), 0);
-      displayNumber = maxN + 1;
+      try {
+        const r = await api.get('/sales/next-number', { params: { invoice_type: form.invoice_type } });
+        displayNumber = r.data.next_number;
+      } catch {
+        const maxN = (rows || [])
+          .filter((s) => s.invoice_type === form.invoice_type)
+          .reduce((m, s) => Math.max(m, Number(s.invoice_number) || 0), 0);
+        displayNumber = maxN + 1;
+      }
     }
 
     const items = form.items.map((it) => {
@@ -202,20 +212,11 @@ export default function Sales() {
   };
 
   useEffect(() => {
-    if (!modal) return;
-    Promise.all([
-      api.get('/advisors'),
-      api.get('/clients'),
-      api.get('/clients-ruc'),
-      api.get('/products'),
-      api.get('/spare-parts'),
-      api.get('/services'),
-    ])
-      .then(([a, c, r, p, s, sv]) =>
-        setCats((old) => ({ ...(old || {}), advisors: a.data, clients: c.data, ruc: r.data, machine: p.data, repuesto: s.data, service: sv.data }))
-      )
+    if (cats) return;
+    api.get('/catalogs')
+      .then((r) => setCats(r.data))
       .catch(() => {});
-  }, [modal]);
+  }, [modal, cats]);
 
   const subtotal = useMemo(
     () => form.items.reduce((acc, i) => acc + Number(i.quantity || 0) * Number(i.unit_price || 0), 0),
@@ -446,6 +447,15 @@ export default function Sales() {
           </table>
           {!filtered.length && <EmptyState title={q ? 'Sin coincidencias' : 'No hay ventas'} hint="Registra tu primera venta" />}
         </div>
+        {pagination && pagination.total_pages > 1 && (
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.total_pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       {/* Formulario de venta */}

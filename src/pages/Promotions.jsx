@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtDate, Badge } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
+import { Pagination } from '../components/Pagination';
 
 const empty = {
   title: '', subtitle: '', features: '', valid_until: '',
@@ -21,12 +22,16 @@ export default function Promotions() {
   const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [pagination, setPagination] = useState(null);
 
   const load = () => {
     setFailed(false);
-    api.get('/promotions').then((r) => setRows(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
+    const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+    api.get(`/promotions?${params}`).then((r) => { setRows(r.data.items); setPagination(r.data.pagination); }).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page]);
 
   const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.title, (r) => r.subtitle, (r) => r.valid_until]);
 
@@ -145,6 +150,15 @@ export default function Promotions() {
           </table>
           {!filtered.length && <EmptyState title={q ? 'Sin coincidencias' : 'No hay promociones'} hint="Agrega tu primera promoción" />}
         </div>
+        {pagination && pagination.total_pages > 1 && (
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.total_pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       <Modal

@@ -76,7 +76,7 @@ export function useConfirm() {
       onConfirm={async () => {
         setState((s) => ({ ...s, loading: true }));
         try {
-          await state.onYes?.();
+          await state.onYes?.(true);
           close();
         } finally {
           setState((s) => ({ ...s, loading: false }));

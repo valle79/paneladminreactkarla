@@ -394,6 +394,11 @@ table.data tbody tr:last-child td { border-bottom: none; }
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.25); flex-shrink: 0;
 }
+.sidebar-brand .sidebar-logo {
+  width: 46px; height: 46px; object-fit: contain; flex-shrink: 0;
+  border-radius: 10px; background: #fff; padding: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
 .sidebar-brand b { display: block; font-family: var(--font-head); font-size: 14.5px; color: #fff; line-height: 1.2; }
 .sidebar-brand small { font-size: 10.5px; color: #9fc7ab; letter-spacing: 0.4px; text-transform: uppercase; }
 
@@ -871,3 +876,64 @@ kbd.hint-key { background: #eef1ef; border: 1px solid var(--line); border-bottom
 
 .totals-row { font-family: var(--font-head); }
 .small-note { font-size: 11.5px; color: var(--faint); }
+
+
+/* ---------- Paginación ---------- */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.pagination-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: var(--g-softer);
+  border-color: var(--g-soft);
+}
+
+.pagination-btn.active {
+  background: var(--g);
+  color: #fff;
+  border-color: var(--g);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pagination-ellipsis {
+  padding: 0 8px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}

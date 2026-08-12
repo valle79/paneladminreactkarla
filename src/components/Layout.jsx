@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Tractor, Wrench, ClipboardList, UserRound, Tags,
-  ShoppingCart, LogOut, Menu, CalendarDays, Leaf, BadgeDollarSign, Tractor as TractorIcon,
+  ShoppingCart, LogOut, Menu, CalendarDays, Leaf, BadgeDollarSign,
 } from 'lucide-react';
 import { useAuth } from '../auth';
+import logoElIqueno from '../images/Logo-El-Iqueño.png';
 
 const NAV = [
   { section: 'Principal' },
@@ -45,7 +46,7 @@ export default function Layout({ children }) {
       <div className={`sidebar-backdrop ${open ? 'show' : ''}`} onClick={() => setOpen(false)} />
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="sidebar-brand">
-          <span className="logo"><TractorIcon size={24} /></span>
+          <img src={logoElIqueno} alt="El Iqueño" className="sidebar-logo" />
           <span>
             <b>Iqueño SAC</b>
             <small>Fabricaciones & Servicios</small>

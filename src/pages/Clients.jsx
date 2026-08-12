@@ -4,6 +4,7 @@ import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtDate } from '../components/ui';
+import { Pagination } from '../components/Pagination';
 
 const emptyDni = { dni: '', names: '', last_names: '', address: '' };
 const emptyRuc = {
@@ -18,7 +19,7 @@ const emptyRuc = {
 function DniTab() {
   const toast = useToast();
   const { ask, ConfirmDialog } = useConfirm();
-  const [rows, setRows] = useState(null);
+  const [data, setData] = useState(null);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(emptyDni);
   const [editingId, setEditingId] = useState(null);
@@ -27,14 +28,24 @@ function DniTab() {
   const [source, setSource] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
 
   const load = () => {
     setFailed(false);
-    api.get(`/clients${showDeleted ? '?include_deleted=true' : ''}`).then((r) => setRows(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...(showDeleted && { include_deleted: 'true' })
+    });
+    api.get(`/clients?${params}`).then((r) => setData(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
-  useEffect(() => { load(); }, [showDeleted]);
+  useEffect(() => { load(); }, [showDeleted, page]);
 
-  const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.names, (r) => r.last_names, (r) => r.dni]);
+  const rows = data?.items || [];
+  const pagination = data?.pagination;
+
+  const { q, setQ, filtered } = useSearch(rows, [(r) => r.names, (r) => r.last_names, (r) => r.dni]);
 
   const openAdd = () => { setEditingId(null); setForm(emptyDni); setSource(''); setModal(true); };
   const openEdit = (r) => { setEditingId(r.id); setForm({ dni: r.dni, names: r.names, last_names: r.last_names, address: r.address }); setSource(''); setModal(true); };
@@ -91,16 +102,16 @@ function DniTab() {
     } catch (e) { toast.error(errMsg(e)); }
   };
 
-  if (!rows) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar los clientes DNI" /> : <Loader text="Cargando clientes DNI..." />;
+  if (!data) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar los clientes DNI" /> : <Loader text="Cargando clientes DNI..." />;
 
   return (
     <>
       <div className="flex" style={{ marginBottom: 16 }}>
-        <label className="check"><input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} /> Mostrar inactivos</label>
+        <label className="check"><input type="checkbox" checked={showDeleted} onChange={(e) => { setShowDeleted(e.target.checked); setPage(1); }} /> Mostrar inactivos</label>
       </div>
       <div className="card">
         <Toolbar search={q} onSearch={setQ} placeholder="Buscar por DNI o nombre...">
-          <span className="pill-count">{filtered.length} clientes</span>
+          <span className="pill-count">{pagination?.total || 0} clientes</span>
           <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> Agregar Cliente</button>
         </Toolbar>
         <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--line)', borderRadius: 0 }}>
@@ -135,6 +146,15 @@ function DniTab() {
           </table>
           {!filtered.length && <EmptyState title={q ? 'Sin coincidencias' : 'No hay clientes'} hint="Agrega tu primer cliente con DNI" />}
         </div>
+        {pagination && pagination.total_pages > 1 && (
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.total_pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       <Modal
@@ -173,7 +193,7 @@ function DniTab() {
 function RucTab() {
   const toast = useToast();
   const { ask, ConfirmDialog } = useConfirm();
-  const [rows, setRows] = useState(null);
+  const [data, setData] = useState(null);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(emptyRuc);
   const [editingId, setEditingId] = useState(null);
@@ -182,14 +202,24 @@ function RucTab() {
   const [source, setSource] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
 
   const load = () => {
     setFailed(false);
-    api.get(`/clients-ruc${showDeleted ? '?include_deleted=true' : ''}`).then((r) => setRows(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...(showDeleted && { include_deleted: 'true' })
+    });
+    api.get(`/clients-ruc?${params}`).then((r) => setData(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
-  useEffect(() => { load(); }, [showDeleted]);
+  useEffect(() => { load(); }, [showDeleted, page]);
 
-  const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.razonsocial, (r) => r.ruc, (r) => r.nombrecomercial]);
+  const rows = data?.items || [];
+  const pagination = data?.pagination;
+
+  const { q, setQ, filtered } = useSearch(rows, [(r) => r.razonsocial, (r) => r.ruc, (r) => r.nombrecomercial]);
 
   const openAdd = () => { setEditingId(null); setForm(emptyRuc); setSource(''); setModal(true); };
   const openEdit = (r) => {
@@ -285,16 +315,16 @@ function RucTab() {
     } catch (e) { toast.error(errMsg(e)); }
   };
 
-  if (!rows) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar las empresas" /> : <Loader text="Cargando empresas..." />;
+  if (!data) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar las empresas" /> : <Loader text="Cargando empresas..." />;
 
   return (
     <>
       <div className="flex" style={{ marginBottom: 16 }}>
-        <label className="check"><input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} /> Mostrar inactivos</label>
+        <label className="check"><input type="checkbox" checked={showDeleted} onChange={(e) => { setShowDeleted(e.target.checked); setPage(1); }} /> Mostrar inactivos</label>
       </div>
       <div className="card">
         <Toolbar search={q} onSearch={setQ} placeholder="Buscar por RUC o razón social...">
-          <span className="pill-count">{filtered.length} empresas</span>
+          <span className="pill-count">{pagination?.total || 0} empresas</span>
           <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> Agregar Empresa</button>
         </Toolbar>
         <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--line)', borderRadius: 0 }}>
@@ -334,6 +364,15 @@ function RucTab() {
           </table>
           {!filtered.length && <EmptyState title={q ? 'Sin coincidencias' : 'No hay empresas'} hint="Agrega tu primera empresa" />}
         </div>
+        {pagination && pagination.total_pages > 1 && (
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.total_pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       <Modal

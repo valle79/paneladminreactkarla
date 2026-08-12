@@ -138,6 +138,27 @@ def get_stats(_: dict = Depends(require_auth)):
 # HELPERS GENÉRICOS
 # ============================================================================
 
+def paginate_query(base_query: str, page: int = 1, limit: int = 50, order_by: str = "id") -> tuple[str, int, int]:
+    """
+    Genera consulta paginada y calcula offset.
+    
+    Returns:
+        (query_paginada, offset, limit)
+    """
+    page = max(1, page)
+    limit = min(max(1, limit), 100)  # Máximo 100 registros por página
+    offset = (page - 1) * limit
+    paginated = f"{base_query} ORDER BY {order_by} LIMIT {limit} OFFSET {offset}"
+    return paginated, offset, limit
+
+
+def get_total_count(table: str, where_clause: str = "") -> int:
+    """Obtiene el conteo total de registros."""
+    wh = f"WHERE {where_clause}" if where_clause else ""
+    row = db.fetch_one(f"SELECT COUNT(*)::int as total FROM {table} {wh}")
+    return row["total"]
+
+
 class SoftDeleteMixin:
     table: str
     json_cols: tuple = ()
@@ -150,10 +171,32 @@ class SoftDeleteMixin:
                 row[c] = db.from_json(row[c])
         return row
 
-    def list(self, include_deleted=False):
+    def list(self, include_deleted=False, page: int = 1, limit: int = 50):
         wh = "" if include_deleted else "WHERE NOT deleted"
-        rows = db.fetch_all(f"SELECT * FROM {self.table} {wh} ORDER BY id")
-        return [self.hydrate(dict(r)) for r in rows]
+        
+        # Obtener total
+        total = get_total_count(self.table, "" if include_deleted else "NOT deleted")
+        
+        # Consulta paginada
+        page = max(1, page)
+        limit = min(max(1, limit), 100)
+        offset = (page - 1) * limit
+        
+        rows = db.fetch_all(
+            f"SELECT * FROM {self.table} {wh} ORDER BY id LIMIT {limit} OFFSET {offset}"
+        )
+        
+        items = [self.hydrate(dict(r)) for r in rows]
+        
+        return {
+            "items": items,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "total_pages": (total + limit - 1) // limit  # Ceil division
+            }
+        }
 
     def get(self, item_id):
         row = db.fetch_one(f"SELECT * FROM {self.table} WHERE id = %s", (item_id,))
@@ -209,8 +252,8 @@ advisors_crud = AdvisorMixin()
 
 
 @app.get("/api/advisors")
-def list_advisors(include_deleted: bool = False, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: advisors_crud.list(include_deleted))
+def list_advisors(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+    return _conn_or_400(lambda: advisors_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/advisors")
@@ -246,8 +289,8 @@ products_crud = ProductMixin()
 
 
 @app.get("/api/products")
-def list_products(include_deleted: bool = False, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: products_crud.list(include_deleted))
+def list_products(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+    return _conn_or_400(lambda: products_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/products")
@@ -283,8 +326,8 @@ spare_parts_crud = SparePartMixin()
 
 
 @app.get("/api/spare-parts")
-def list_spare_parts(include_deleted: bool = False, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: spare_parts_crud.list(include_deleted))
+def list_spare_parts(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+    return _conn_or_400(lambda: spare_parts_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/spare-parts")
@@ -319,8 +362,8 @@ services_crud = ServiceMixin()
 
 
 @app.get("/api/services")
-def list_services(include_deleted: bool = False, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: services_crud.list(include_deleted))
+def list_services(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+    return _conn_or_400(lambda: services_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/services")
@@ -355,8 +398,8 @@ clients_crud = ClientMixin()
 
 
 @app.get("/api/clients")
-def list_clients(include_deleted: bool = False, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_crud.list(include_deleted))
+def list_clients(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+    return _conn_or_400(lambda: clients_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/clients")
@@ -391,8 +434,8 @@ clients_ruc_crud = ClientRucMixin()
 
 
 @app.get("/api/clients-ruc")
-def list_clients_ruc(include_deleted: bool = False, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_ruc_crud.list(include_deleted))
+def list_clients_ruc(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+    return _conn_or_400(lambda: clients_ruc_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/clients-ruc")
@@ -423,11 +466,28 @@ class PromotionMixin(SoftDeleteMixin):
     table = "promotions"
     json_cols = ()
 
-    def list(self, include_deleted=False):
+    def list(self, include_deleted=False, page: int = 1, limit: int = 50):
+        # Obtener total
+        total = get_total_count(self.table, "")
+        
+        # Paginación
+        page = max(1, page)
+        limit = min(max(1, limit), 100)
+        offset = (page - 1) * limit
+        
         rows = db.fetch_all(
-            "SELECT * FROM promotions ORDER BY display_order, created_at DESC"
+            f"SELECT * FROM promotions ORDER BY display_order, created_at DESC LIMIT {limit} OFFSET {offset}"
         )
-        return [dict(r) for r in rows]
+        
+        return {
+            "items": [dict(r) for r in rows],
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "total_pages": (total + limit - 1) // limit
+            }
+        }
 
     def get(self, item_id):
         row = db.fetch_one("SELECT * FROM promotions WHERE id = %s", (item_id,))
@@ -445,15 +505,16 @@ promotions_crud = PromotionMixin()
 
 
 @app.get("/api/promotions")
-def list_promotions(only_web: bool = False, _: dict = Depends(require_auth)):
+def list_promotions(only_web: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
     def run():
         if only_web:
+            # Sin paginación para web pública
             rows = db.fetch_all(
                 "SELECT * FROM promotions WHERE is_active AND show_in_web "
                 "ORDER BY display_order, created_at DESC"
             )
-            return [dict(r) for r in rows]
-        return promotions_crud.list()
+            return {"items": [dict(r) for r in rows]}
+        return promotions_crud.list(False, page, limit)
     return _conn_or_400(run)
 
 
@@ -627,11 +688,43 @@ def _serialize_sale(row: dict) -> dict:
 
 
 @app.get("/api/sales")
-def list_sales(include_deleted: bool = False, _: dict = Depends(require_auth)):
+def list_sales(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
     def run():
         wh = "" if include_deleted else "WHERE NOT deleted"
-        rows = db.fetch_all(f"SELECT * FROM sales {wh} ORDER BY created_at DESC, id DESC")
-        return _serialize_sales(rows)
+        
+        # Total count
+        total = get_total_count("sales", "" if include_deleted else "NOT deleted")
+        
+        # Paginación
+        page_num = max(1, page)
+        page_limit = min(max(1, limit), 100)
+        offset = (page_num - 1) * page_limit
+        
+        rows = db.fetch_all(
+            f"SELECT * FROM sales {wh} ORDER BY created_at DESC, id DESC LIMIT {page_limit} OFFSET {offset}"
+        )
+        
+        return {
+            "items": _serialize_sales(rows),
+            "pagination": {
+                "page": page_num,
+                "limit": page_limit,
+                "total": total,
+                "total_pages": (total + page_limit - 1) // page_limit
+            }
+        }
+    return _conn_or_400(run)
+
+
+@app.get("/api/sales/next-number")
+def next_sale_number(invoice_type: str, _: dict = Depends(require_auth)):
+    def run():
+        row = db.fetch_one(
+            "SELECT COALESCE(MAX(invoice_number), 0) AS max_n FROM sales "
+            "WHERE invoice_type = %s AND NOT deleted",
+            (invoice_type,),
+        )
+        return {"next_number": int(row["max_n"]) + 1}
     return _conn_or_400(run)
 
 
@@ -834,6 +927,32 @@ def upload_file(file: UploadFile = File(...), _: dict = Depends(require_auth)):
 # ============================================================================
 # HEALTH CHECK
 # ============================================================================
+
+@app.get("/api/catalogs")
+def get_catalogs(_: dict = Depends(require_auth)):
+    """Todos los catálogos del modal de ventas en UNA sola conexión."""
+    def run():
+        conn = db.get_conn()
+        try:
+            with conn.cursor() as cur:
+                res = {}
+                cur.execute("SELECT * FROM advisors WHERE NOT deleted ORDER BY name")
+                res["advisors"] = [advisors_crud.hydrate(dict(r)) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM clients WHERE NOT deleted ORDER BY id")
+                res["clients"] = [dict(r) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM clients_ruc WHERE NOT deleted ORDER BY id")
+                res["ruc"] = [dict(r) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM machine_products WHERE NOT deleted ORDER BY name")
+                res["machine"] = [products_crud.hydrate(dict(r)) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM spare_parts WHERE NOT deleted ORDER BY name")
+                res["repuesto"] = [spare_parts_crud.hydrate(dict(r)) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM services WHERE NOT deleted ORDER BY name")
+                res["service"] = [dict(r) for r in cur.fetchall()]
+            return res
+        finally:
+            db.close_conn(conn)
+    return _conn_or_400(run)
+
 
 @app.get("/api/health")
 def health():

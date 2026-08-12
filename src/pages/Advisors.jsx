@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, Loader, EmptyState, ErrorState, AvatarCell, fmtDate } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
+import { Pagination } from '../components/Pagination';
 
 const SPECIALTIES = ['Maquinaria', 'Tractores', 'Agricultura', 'Proyectos Especiales', 'Servicio al Cliente', 'Administracion', 'Ventas', 'Otros'];
 
@@ -24,12 +25,16 @@ export default function Advisors() {
   const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [pagination, setPagination] = useState(null);
 
   const load = () => {
     setFailed(false);
-    api.get('/advisors').then((r) => setRows(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
+    const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+    api.get(`/advisors?${params}`).then((r) => { setRows(r.data.items); setPagination(r.data.pagination); }).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page]);
 
   const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.name, (r) => r.position, (r) => r.whatsapp]);
 
@@ -143,6 +148,15 @@ export default function Advisors() {
           </table>
           {!filtered.length && <EmptyState title={q ? 'Sin coincidencias' : 'No hay asesores'} hint={q ? 'Prueba con otro término de búsqueda' : 'Agrega tu primer asesor'} />}
         </div>
+        {pagination && pagination.total_pages > 1 && (
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.total_pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       <Modal

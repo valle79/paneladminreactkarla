@@ -5,9 +5,11 @@ import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, Loader, EmptyState, ErrorState, ImageCell, PdfLink, fmtMoney, fmtDate } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
+import { Pagination } from '../components/Pagination';
 
 const parseJson = (v, fallback) => {
   if (v == null || v === '') return fallback;
+  if (typeof v !== 'string') return v ?? fallback;
   try { const p = JSON.parse(v); return p ?? fallback; } catch { return fallback; }
 };
 
@@ -25,12 +27,16 @@ export default function SpareParts() {
   const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [pagination, setPagination] = useState(null);
 
   const load = () => {
     setFailed(false);
-    api.get('/spare-parts').then((r) => setRows(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
+    const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+    api.get(`/spare-parts?${params}`).then((r) => { setRows(r.data.items); setPagination(r.data.pagination); }).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page]);
 
   const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.name, (r) => r.description]);
 
@@ -144,6 +150,15 @@ export default function SpareParts() {
           </table>
           {!filtered.length && <EmptyState title={q ? 'Sin coincidencias' : 'No hay repuestos'} hint={q ? 'Prueba con otro término' : 'Agrega tu primer repuesto'} />}
         </div>
+        {pagination && pagination.total_pages > 1 && (
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.total_pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       <Modal
