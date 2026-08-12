@@ -1,0 +1,658 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Plus, Pencil, Trash2, ShoppingCart, Save, X, FilePlus2, Eye, User,
+  UserRound, CircleDollarSign, Printer,
+} from 'lucide-react';
+import { api, errMsg } from '../api';
+import { useToast } from '../components/Toast';
+import { Modal, useConfirm } from '../components/Modal';
+import ProformaModal from '../components/Proforma';
+import {
+  Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtMoney, fmtDateTime,
+  StatusBadge, DocTypeBadge, InvoiceBadge,
+} from '../components/ui';
+
+const emptySale = {
+  client_type: 'dni',
+  client_id: '',
+  advisor_id: '',
+  invoice_type: 'boleta',
+  invoice_number: '',
+  with_igv: true,
+  payment_status: 'pagado',
+  payment_description: '',
+  payment_date: '',
+  amount_paid: '',
+  pending_payment_date: '',
+  items: [],
+};
+
+const TYPE_ORDER = { machine: 0, repuesto: 1, service: 2, manual: 3 };
+const ITEM_TYPES = [
+  { value: 'machine', label: 'Productos' },
+  { value: 'repuesto', label: 'Repuestos' },
+  { value: 'service', label: 'Servicios' },
+  { value: 'manual', label: 'Items manuales' },
+];
+
+export default function Sales() {
+  const toast = useToast();
+  const { ask, ConfirmDialog } = useConfirm();
+  const [rows, setRows] = useState(null);
+  const [modal, setModal] = useState(false);
+  const [view, setView] = useState(null);
+  const [form, setForm] = useState(emptySale);
+  const [editingId, setEditingId] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [cats, setCats] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const [preview, setPreview] = useState(null);
+
+  const load = () => {
+    setFailed(false);
+    api.get('/sales').then((r) => setRows(r.data)).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
+  };
+  useEffect(() => { load(); }, []);
+
+  const isProformaLike = form.invoice_type === 'proforma' || form.invoice_type === 'cotizacion';
+
+  const buildPayload = () => ({
+    client_id: Number(form.client_id),
+    client_type: form.client_type,
+    advisor_id: form.advisor_id ? Number(form.advisor_id) : null,
+    invoice_type: form.invoice_type,
+    invoice_number: isProformaLike ? null : Number(form.invoice_number),
+    with_igv: form.with_igv,
+    subtotal: Number(subtotal.toFixed(2)),
+    igv: Number(igv.toFixed(2)),
+    total: Number(total.toFixed(2)),
+    payment_status: form.payment_status,
+    payment_description: form.payment_description || '',
+    payment_date: form.payment_status === 'por_pagar' ? form.payment_date || null : null,
+    amount_paid: form.payment_status === 'a_cuenta' ? Number(form.amount_paid) : null,
+    amount_pending: form.payment_status === 'a_cuenta' ? Number((total - Number(form.amount_paid)).toFixed(2)) : null,
+    pending_payment_date: form.payment_status === 'a_cuenta' ? form.pending_payment_date || null : null,
+    items: form.items.map((i) => ({
+      item_type: i.item_type,
+      item_id: i.item_id ? Number(i.item_id) : null,
+      manual_name: i.item_type === 'manual' ? i.manual_name || 'Item manual' : null,
+      manual_description: i.manual_description || null,
+      quantity: Number(i.quantity) || 1,
+      unit_price: Number(i.unit_price) || 0,
+    })),
+  });
+
+  const validate = () => {
+    if (!form.client_id) return toast.warning('Selecciona un cliente');
+    if (form.items.length === 0) return toast.warning('Agrega al menos un item');
+    if (!isProformaLike && !form.invoice_number) return toast.warning('Indica el número de documento');
+    if (form.payment_status === 'a_cuenta' && (!form.amount_paid || Number(form.amount_paid) <= 0))
+      return toast.warning('Indica el monto abonado');
+    return true;
+  };
+
+  const openPreview = () => {
+    if (!validate()) return;
+    const payload = buildPayload();
+    const client = (form.client_type === 'dni' ? cats?.clients : cats?.ruc || []).find((c) => String(c.id) === String(form.client_id));
+    const advisor = (cats?.advisors || []).find((a) => String(a.id) === String(form.advisor_id));
+
+    let displayNumber = form.invoice_number || null;
+    if (isProformaLike && !displayNumber) {
+      const maxN = (rows || [])
+        .filter((s) => s.invoice_type === form.invoice_type)
+        .reduce((m, s) => Math.max(m, Number(s.invoice_number) || 0), 0);
+      displayNumber = maxN + 1;
+    }
+
+    const items = form.items.map((it) => {
+      const found =
+        it.item_type !== 'manual'
+          ? (cats?.[it.item_type] || []).find((c) => String(c.id) === String(it.item_id))
+          : null;
+      return {
+        name: found?.name || it.manual_name || 'Item',
+        description: found?.description,
+        specifications: found?.specifications || [],
+        features: found?.features || [],
+        is_manual: it.item_type === 'manual',
+        manual_description: it.manual_description,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+      };
+    });
+
+    setPreview({
+      payload,
+      sale: {
+        invoice_type: form.invoice_type,
+        invoice_number: displayNumber,
+        client: {
+          names: client?.names, last_names: client?.last_names, dni: client?.dni,
+          address: client?.address, razonsocial: client?.razonsocial, ruc: client?.ruc,
+          direccion: client?.direccion,
+        },
+        advisor_name: advisor?.name,
+        subtotal, igv, total,
+        items,
+        created_at: new Date().toISOString(),
+      },
+    });
+  };
+
+  const confirmPreview = async () => {
+    try {
+      if (editingId) {
+        await api.put(`/sales/${editingId}`, preview.payload);
+        toast.success('Venta actualizada');
+      } else {
+        await api.post('/sales', preview.payload);
+        toast.success(isProformaLike ? 'Proforma registrada correctamente' : 'Venta registrada correctamente');
+      }
+      setPreview(null);
+      setModal(false);
+      load();
+    } catch (e) {
+      toast.error(errMsg(e));
+      throw e;
+    }
+  };
+
+  const { q, setQ, filtered } = useSearch(rows || [], [
+    (r) => (r.invoice_number ? String(r.invoice_number) : ''),
+    (r) => r.invoice_type,
+    (r) => r.client?.names || r.client?.razonsocial || '',
+    (r) => r.client?.dni || r.client?.ruc || '',
+    (r) => r.advisor?.name || '',
+    (r) => (r.total ? String(r.total) : ''),
+  ]);
+
+  const openAdd = async () => {
+    setEditingId(null);
+    setForm({ ...emptySale, invoice_type: 'boleta' });
+    setModal(true);
+  };
+  const openEdit = (s) => {
+    setEditingId(s.id);
+    setForm({
+      client_type: s.client_type || 'dni',
+      client_id: s.client_id || '',
+      advisor_id: s.advisor_id || '',
+      invoice_type: s.invoice_type,
+      invoice_number: s.invoice_number || '',
+      with_igv: !!s.with_igv,
+      payment_status: s.payment_status || 'pagado',
+      payment_description: s.payment_description || '',
+      payment_date: s.payment_date || '',
+      amount_paid: s.amount_paid ?? '',
+      pending_payment_date: s.pending_payment_date || '',
+      items: (s.items || []).map((i) => ({
+        item_type: i.item_type, item_id: i.item_id, manual_name: i.manual_name || '',
+        manual_description: i.manual_description || '',
+        quantity: i.quantity, unit_price: i.unit_price, selected: i.item_id ?? `${i.manual_name}`,
+      })),
+    });
+    setModal(true);
+  };
+
+  useEffect(() => {
+    if (!modal) return;
+    api
+      .get('/advisors')
+      .then((r) => setCats((c) => ({ ...(c || {}), advisors: r.data })))
+      .catch(() => {});
+    api
+      .get('/clients')
+      .then((r) => setCats((c) => ({ ...(c || {}), clients: r.data })))
+      .catch(() => {});
+    api
+      .get('/clients-ruc')
+      .then((r) => setCats((c) => ({ ...(c || {}), ruc: r.data })))
+      .catch(() => {});
+    api
+      .get('/products')
+      .then((r) => setCats((c) => ({ ...(c || {}), machine: r.data })))
+      .catch(() => {});
+    api
+      .get('/spare-parts')
+      .then((r) => setCats((c) => ({ ...(c || {}), repuesto: r.data })))
+      .catch(() => {});
+    api
+      .get('/services')
+      .then((r) => setCats((c) => ({ ...(c || {}), service: r.data })))
+      .catch(() => {});
+  }, [modal]);
+
+  const subtotal = useMemo(
+    () => form.items.reduce((acc, i) => acc + Number(i.quantity || 0) * Number(i.unit_price || 0), 0),
+    [form.items]
+  );
+  const igv = form.with_igv ? subtotal * 0.18 : 0;
+  const total = subtotal + igv;
+
+  const setItemField = (idx, key, value) =>
+    setForm((f) => ({ ...f, items: f.items.map((it, j) => (j === idx ? { ...it, [key]: value } : it)) }));
+
+  const addItem = (type) => {
+    const blank = {
+      item_type: type, item_id: '', selected: '', manual_name: '', manual_description: '',
+      quantity: 1, unit_price: type === 'manual' ? '' : 0,
+    };
+    if (type === 'manual') {
+      blank.selected = `manual_${Date.now()}`;
+      blank.manual_name = '';
+      blank.quantity = 1;
+      blank.unit_price = '';
+    }
+    setForm((f) => ({ ...f, items: [...f.items, blank] }));
+  };
+
+  const pickItem = (idx, type, selected) => {
+    const cat = cats?.[type] || [];
+    const found = cat.find((c) => String(c.id) === String(selected));
+    setItemField(idx, 'selected', selected);
+    if (found) {
+      setForm((f) => ({
+        ...f,
+        items: f.items.map((it, j) =>
+          j === idx
+            ? {
+                ...it,
+                item_type: type,
+                item_id: found.id,
+                manual_name: type === 'manual' ? it.manual_name : '',
+                unit_price: found.price ?? it.unit_price,
+                quantity: it.quantity || 1,
+              }
+            : it
+        ),
+      }));
+    } else if (type === 'manual') {
+      setItemField(idx, 'item_id', '');
+    }
+  };
+
+  const removeItem = (idx) => setForm((f) => ({ ...f, items: f.items.filter((_, j) => j !== idx) }));
+
+  const paymentFields = (
+    <div>
+      <div className="field">
+        <label>Estado de pago</label>
+        <select className="select" value={form.payment_status} onChange={(e) => setForm({ ...form, payment_status: e.target.value })}>
+          <option value="pagado">Pagado</option>
+          <option value="por_pagar">Por pagar</option>
+          <option value="a_cuenta">A cuenta</option>
+        </select>
+      </div>
+      {form.payment_status === 'por_pagar' && (
+        <div className="field">
+          <label>Fecha compromiso de pago</label>
+          <input className="input" type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} />
+        </div>
+      )}
+      {form.payment_status === 'a_cuenta' && (
+        <>
+          <div className="grid-2">
+            <div className="field">
+              <label>Monto abonado</label>
+              <input className="input" type="number" min="0" step="0.01" value={form.amount_paid} onChange={(e) => setForm({ ...form, amount_paid: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>Monto pendiente</label>
+              <input
+                className="input"
+                value={form.amount_paid === '' ? '' : fmtMoney(total - Number(form.amount_paid)).replace('S/ ', '')}
+                disabled
+                style={{ background: 'var(--g-softer)' }}
+              />
+            </div>
+          </div>
+          <div className="field">
+            <label>Fecha de pago pendiente</label>
+            <input className="input" type="date" value={form.pending_payment_date} onChange={(e) => setForm({ ...form, pending_payment_date: e.target.value })} />
+          </div>
+        </>
+      )}
+      <div className="field">
+        <label>Nota de pago</label>
+        <textarea className="textarea" placeholder="Comentarios sobre el pago" value={form.payment_description} onChange={(e) => setForm({ ...form, payment_description: e.target.value })} />
+      </div>
+    </div>
+  );
+
+  const save = async () => {
+    if (!validate()) return;
+    setBusy(true);
+    try {
+      const payload = buildPayload();
+      if (editingId) {
+        await api.put(`/sales/${editingId}`, payload);
+        toast.success('Venta actualizada');
+      } else {
+        await api.post('/sales', payload);
+        toast.success('Venta registrada correctamente');
+      }
+      setModal(false);
+      load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (s) => {
+    const ok = await ask({
+      title: 'Anular venta',
+      message: `¿Deseas anular la venta ${s.invoice_type.toUpperCase()}-${String(s.invoice_number || '').padStart(7, '0')}? Se ocultará del sistema.`,
+      confirmText: 'Anular venta',
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/sales/${s.id}`);
+      toast.success('Venta anulada');
+      load();
+    } catch (e) { toast.error(errMsg(e)); }
+  };
+
+  if (!rows) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar las ventas" /> : <Loader text="Cargando ventas..." />;
+
+  const clientList = form.client_type === 'dni' ? cats?.clients || [] : cats?.ruc || [];
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <h1>Ventas</h1>
+          <div className="sub">Boletas, facturas, proformas y cotizaciones</div>
+        </div>
+        <button className="btn btn-primary btn-lg" onClick={openAdd}><Plus size={17} /> Nueva Venta</button>
+      </div>
+
+      <div className="card">
+        <Toolbar search={q} onSearch={setQ} placeholder="Buscar por documento, cliente o monto...">
+          <span className="pill-count">{filtered.length} ventas</span>
+        </Toolbar>
+        <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--line)', borderRadius: 0 }}>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Documento</th>
+                <th>Cliente</th>
+                <th>Asesor</th>
+                <th>Total</th>
+                <th>Pago</th>
+                <th>Fecha</th>
+                <th style={{ textAlign: 'right' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((s) => (
+                <tr key={s.id}>
+                  <td>
+                    <InvoiceBadge type={s.invoice_type} number={s.invoice_number} />
+                    <div style={{ marginTop: 3 }}><DocTypeBadge type={s.invoice_type} /></div>
+                  </td>
+                  <td style={{ maxWidth: 240 }}>
+                    <div className="cell-title">{s.client ? (s.client.names ? `${s.client.names} ${s.client.last_names || ''}` : s.client.razonsocial) : '—'}</div>
+                    <div className="text-muted" style={{ fontSize: 12 }}>
+                      {s.client ? (s.client.dni ? `DNI ${s.client.dni}` : s.client.ruc ? `RUC ${s.client.ruc}` : '') : '—'}
+                    </div>
+                  </td>
+                  <td className="text-muted">{s.advisor?.name || '—'}</td>
+                  <td className="money"><b>{fmtMoney(s.total)}</b></td>
+                  <td><StatusBadge value={s.payment_status} /></td>
+                  <td className="text-muted">{fmtDateTime(s.created_at)}</td>
+                  <td>
+                    <div className="row-actions">
+                      <button className="btn-icon" onClick={() => setView(s)} title="Ver detalle"><Eye size={14} /></button>
+                      {(s.invoice_type === 'proforma' || s.invoice_type === 'cotizacion') && (
+                        <button className="btn-icon" onClick={() => setPreview({ sale: s, payload: null })} title="Imprimir / PDF"><Printer size={14} /></button>
+                      )}
+                      <button className="btn-icon" onClick={() => openEdit(s)} title="Editar"><Pencil size={14} /></button>
+                      <button className="btn-icon danger" onClick={() => remove(s)} title="Anular"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!filtered.length && <EmptyState title={q ? 'Sin coincidencias' : 'No hay ventas'} hint="Registra tu primera venta" />}
+        </div>
+      </div>
+
+      {/* Formulario de venta */}
+      <Modal
+        open={modal}
+        onClose={() => setModal(false)}
+        title={editingId ? 'Editar venta' : 'Nueva venta'}
+        icon={<ShoppingCart size={18} />}
+        size="lg"
+        footer={
+          <>
+            <button className="btn btn-ghost" onClick={() => setModal(false)}><X size={15} /> Cancelar</button>
+            {isProformaLike ? (
+              <button className="btn btn-yellow" onClick={openPreview} disabled={busy} style={{ justifyContent: 'center', minWidth: 190 }}>
+                <Eye size={16} /> Vista previa <b className="money" style={{ marginLeft: 4 }}>({fmtMoney(total)})</b>
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={save} disabled={busy} style={{ justifyContent: 'center', minWidth: 190 }}>
+                {busy ? <span className="spinner" /> : <Save size={15} />} Guardar venta {!busy && <b className="money" style={{ marginLeft: 4 }}>({fmtMoney(total)})</b>}
+              </button>
+            )}
+          </>
+        }
+      >
+        <div className="grid-3">
+          <div className="field">
+            <label><User size={14} /> Tipo de cliente</label>
+            <select className="select" value={form.client_type} onChange={(e) => setForm({ ...form, client_type: e.target.value, client_id: '' })}>
+              <option value="dni">Persona (DNI)</option>
+              <option value="ruc">Empresa (RUC)</option>
+            </select>
+          </div>
+          <div className="field" style={{ gridColumn: 'span 2' }}>
+            <label><UserRound size={14} /> Cliente <span className="req">*</span></label>
+            <select className="select" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
+              <option value="">— Seleccionar cliente —</option>
+              {clientList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {form.client_type === 'dni'
+                    ? `${c.names} ${c.last_names || ''} — DNI ${c.dni}`
+                    : `${c.razonsocial} — RUC ${c.ruc}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid-3">
+          <div className="field">
+            <label><User size={14} /> Asesor</label>
+            <select className="select" value={form.advisor_id} onChange={(e) => setForm({ ...form, advisor_id: e.target.value })}>
+              <option value="">— Sin asesor —</option>
+              {(cats?.advisors || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label><FilePlus2 size={14} /> Tipo de documento</label>
+            <select className="select" value={form.invoice_type} onChange={(e) => setForm({ ...form, invoice_type: e.target.value })}>
+              <option value="boleta">Boleta</option>
+              <option value="factura">Factura</option>
+              <option value="proforma">Proforma</option>
+              <option value="cotizacion">Cotización</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>N° documento</label>
+            {form.invoice_type === 'proforma' || form.invoice_type === 'cotizacion' ? (
+              <input className="input" value="Auto" disabled style={{ background: 'var(--g-softer)', fontWeight: 700, color: 'var(--g-dark)' }} />
+            ) : (
+              <input className="input" type="number" min="1" placeholder="Ej. 1001" value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} />
+            )}
+          </div>
+        </div>
+
+        <label className="check" style={{ marginBottom: 12 }}>
+          <input type="checkbox" checked={form.with_igv} onChange={(e) => setForm({ ...form, with_igv: e.target.checked })} />
+          Con IGV (18%)
+        </label>
+
+        <div className="field">
+          <label>Items de la venta</label>
+          <div className="sale-items">
+            <div className="sale-item-row header">
+              <span>Descripción</span><span>Cant.</span><span>P. Unit.</span><span>Subtotal</span><span />
+            </div>
+            {form.items.length === 0 && (
+              <div className="sale-item-row" style={{ justifyItems: 'center', color: 'var(--faint)', fontSize: 12.5, padding: '18px' }}>
+                Sin items — agrega uno con los botones de abajo
+              </div>
+            )}
+            {form.items.map((it, idx) => {
+              const isManual = it.item_type === 'manual';
+              return (
+                <div className="sale-item-row" key={idx}>
+                  {isManual ? (
+                    <div>
+                      <input className="input" placeholder="Nombre del item" value={it.manual_name} onChange={(e) => setItemField(idx, 'manual_name', e.target.value)} />
+                    </div>
+                  ) : (
+                    <select
+                      className="select"
+                      value={it.selected}
+                      onChange={(e) => pickItem(idx, it.item_type, e.target.value)}
+                    >
+                      <option value="">— Seleccionar {it.item_type === 'machine' ? 'producto' : it.item_type === 'repuesto' ? 'repuesto' : 'servicio'} —</option>
+                      {(cats?.[it.item_type] || []).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} — {fmtMoney(c.price)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input className="input" type="number" min="0.01" step="0.01" value={it.quantity} onChange={(e) => setItemField(idx, 'quantity', e.target.value)} />
+                  <input className="input" type="number" min="0" step="0.01" value={it.unit_price} onChange={(e) => setItemField(idx, 'unit_price', e.target.value)} />
+                  <b className="money" style={{ fontSize: 13 }}>{fmtMoney(Number(it.quantity || 0) * Number(it.unit_price || 0))}</b>
+                  <button className="btn-icon danger" onClick={() => removeItem(idx)}><Trash2 size={14} /></button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex" style={{ gap: 8, flexWrap: 'wrap' }}>
+            {ITEM_TYPES.map((t) => (
+              <button key={t.value} className="btn btn-outline btn-sm" onClick={() => addItem(t.value)}>
+                <Plus size={13} /> {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid-2">
+          <div className="sale-summary">
+            <div className="line"><span className="text-muted">Subtotal</span><span className="money">{fmtMoney(subtotal)}</span></div>
+            <div className="line"><span className="text-muted">IGV {form.with_igv ? '(18%)' : '(0%)'}</span><span className="money">{fmtMoney(igv)}</span></div>
+            <div className="line total"><span>Total</span><span className="money">{fmtMoney(total)}</span></div>
+          </div>
+          {paymentFields}
+        </div>
+      </Modal>
+
+      {/* Detalle de venta */}
+      <Modal
+        open={!!view}
+        onClose={() => setView(null)}
+        title="Detalle de la venta"
+        icon={<CircleDollarSign size={18} />}
+        size="lg"
+        footer={
+          <button className="btn btn-primary" onClick={() => setView(null)}>Entendido</button>
+        }
+      >
+        {view && (
+          <>
+            <div className="flex-between" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
+              <div>
+                <div>
+                  <InvoiceBadge type={view.invoice_type} number={view.invoice_number} />
+                  {' '}<DocTypeBadge type={view.invoice_type} />
+                </div>
+                <div className="text-muted" style={{ fontSize: 12.5, marginTop: 4 }}>Registrado: {fmtDateTime(view.created_at)}</div>
+              </div>
+              <StatusBadge value={view.payment_status} />
+            </div>
+
+            <div className="grid-3" style={{ marginBottom: 14 }}>
+              <div>
+                <div className="text-muted" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>Cliente</div>
+                <b>{view.client ? (view.client.names ? `${view.client.names} ${view.client.last_names || ''}` : view.client.razonsocial) : '—'}</b>
+                <div className="text-muted" style={{ fontSize: 12 }}>
+                  {view.client ? (view.client.dni ? `DNI ${view.client.dni}` : view.client.ruc ? `RUC ${view.client.ruc}` : '') : ''}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>Asesor</div>
+                <b>{view.advisor?.name || '—'}</b>
+              </div>
+              <div>
+                <div className="text-muted" style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>IGV</div>
+                <b>{view.with_igv ? 'Con IGV (18%)' : 'Sin IGV'}</b>
+              </div>
+            </div>
+
+            <div className="table-wrap" style={{ marginBottom: 14 }}>
+              <table className="data">
+                <thead>
+                  <tr><th>Item</th><th>Tipo</th><th>Cant.</th><th>P. Unit.</th><th>Subtotal</th></tr>
+                </thead>
+                <tbody>
+                  {(view.items || []).map((i, idx) => (
+                    <tr key={idx}>
+                      <td className="cell-title">{i.name || i.manual_name || 'Item'}
+                        {i.manual_description && <div className="text-muted" style={{ fontSize: 12 }}>{i.manual_description}</div>}
+                      </td>
+                      <td>
+                        <span className="chip">
+                          {{ machine: 'Producto', repuesto: 'Repuesto', service: 'Servicio', manual: 'Manual' }[i.item_type] || i.item_type}
+                        </span>
+                      </td>
+                      <td>{i.quantity}</td>
+                      <td className="money">{fmtMoney(i.unit_price)}</td>
+                      <td className="money"><b>{fmtMoney(i.quantity * i.unit_price)}</b></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="sale-summary">
+              <div className="line"><span className="text-muted">Subtotal</span><span className="money">{fmtMoney(view.subtotal)}</span></div>
+              <div className="line"><span className="text-muted">IGV</span><span className="money">{fmtMoney(view.igv)}</span></div>
+              <div className="line total"><span>Total</span><span className="money">{fmtMoney(view.total)}</span></div>
+              {view.amount_paid != null && (
+                <div className="line"><span className="text-muted">Abonado</span><span className="money">{fmtMoney(view.amount_paid)}</span></div>
+              )}
+              {view.amount_pending != null && (
+                <div className="line"><span className="text-muted">Pendiente</span><span className="money text-danger">{fmtMoney(view.amount_pending)}</span></div>
+              )}
+            </div>
+            {view.payment_description && (
+              <div style={{ marginTop: 12, fontSize: 13, color: 'var(--muted)', background: 'var(--g-softer)', padding: '10px 14px', borderRadius: 10 }}>
+                <b>Nota de pago:</b> {view.payment_description}
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
+
+      {ConfirmDialog}
+
+      <ProformaModal
+        open={!!preview}
+        onClose={() => setPreview(null)}
+        sale={preview?.sale}
+        onConfirm={preview?.payload ? confirmPreview : null}
+      />
+    </>
+  );
+}
