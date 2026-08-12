@@ -9,6 +9,15 @@ import logoElIqueno from '../images/Logo-El-Iqueño.png';
    ProformaDocument: el documento imprimible (A4)
    ============================================================ */
 
+const DocFooter = ({ page = 1 }) => (
+  <div className="proforma-footer">
+    <div className="proforma-footer-row">{COMPANY.footer.thanks}</div>
+    <div className="proforma-footer-row">{COMPANY.footer.tagline}</div>
+    <div className="proforma-footer-row proforma-footer-contact">{COMPANY.footer.contact}</div>
+    <div className="proforma-footer-page">Página {page}</div>
+  </div>
+);
+
 export const ProformaDocument = forwardRef(function ProformaDocument({ sale, options, documentTime }, ref) {
   const o = { ...PROFORMA_DEFAULTS, ...options };
   const isProformaLike = sale.invoice_type === 'proforma' || sale.invoice_type === 'cotizacion';
@@ -209,10 +218,12 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
         </div>
       )}
 
-      <div className="proforma-foot">RUC: {COMPANY.ruc} · {COMPANY.address}</div>
+      <div className="proforma-doc-foot">
+        <DocFooter page={1} />
+      </div>
 
       {/* Fotos de referencia (siguiente hoja) */}
-      {isProformaLike && itemsConFoto.length > 0 && (
+      {itemsConFoto.length > 0 && (
         <div className="proforma-photos">
           <div className="proforma-photos-title">Fotos de referencia</div>
           <div className="proforma-photos-grid">
@@ -227,6 +238,7 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
           <div className="proforma-photos-note">
             Las imágenes mostradas son referenciales; el producto final puede variar ligeramente según modelo y versión.
           </div>
+          <DocFooter page={2} />
         </div>
       )}
     </div>

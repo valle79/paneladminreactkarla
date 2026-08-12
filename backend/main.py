@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import consulta_docs
 import db
 from auth import create_token, require_auth
 
@@ -61,6 +62,38 @@ def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")
     token = create_token({"role": "admin"})
     return {"token": token, "user": {"name": "Administrador", "email": "admin@iqueño.sac"}}
+
+# ============================================================================
+# CONSULTA RENIEC (DNI) / SUNAT (RUC)
+# ============================================================================
+
+class DniConsultaRequest(BaseModel):
+    dni: str
+
+
+class RucConsultaRequest(BaseModel):
+    ruc: str
+
+
+@app.post("/api/consultar/dni")
+def consultar_dni_endpoint(payload: DniConsultaRequest, _: dict = Depends(require_auth)):
+    try:
+        return consulta_docs.consultar_dni(payload.dni)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=502, detail="Error al conectar con RENIEC")
+
+
+@app.post("/api/consultar/ruc")
+def consultar_ruc_endpoint(payload: RucConsultaRequest, _: dict = Depends(require_auth)):
+    try:
+        return consulta_docs.consultar_ruc(payload.ruc)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=502, detail="Error al conectar con SUNAT")
+
 
 # ============================================================================
 # DASHBOARD / STATS
@@ -452,74 +485,145 @@ def _next_invoice_number(invoice_type: str) -> int:
     return int(row["max_n"]) + 1
 
 
-def _resolve_item_details(item: dict) -> dict:
-    """Enriquece el item con nombre, descripción, especificaciones e imagen del catálogo."""
-    base = {"name": item.get("manual_name") or "Item"}
-    if item.get("manual_name"):
-        base["is_manual"] = True
-        return base
-    table = {
-        "machine": "machine_products",
-        "repuesto": "spare_parts",
-        "service": "services",
-    }.get(item.get("item_type"))
-    if table and item.get("item_id"):
+def _resolve_item_details_batch(items: list[dict], catalogs: dict) -> None:
+    """Enriquece los items con datos del catálogo usando dicts ya cargados."""
+    for it in items:
+        base = {"name": it.get("manual_name") or "Item"}
+        if it.get("manual_name"):
+            base["is_manual"] = True
+        else:
+            table = {
+                "machine": "machine_products",
+                "repuesto": "spare_parts",
+                "service": "services",
+            }.get(it.get("item_type"))
+            if table and it.get("item_id"):
+                row = catalogs.get(table, {}).get(it["item_id"])
+                if row:
+                    base = dict(row)
+                    base["is_manual"] = False
+        it["name"] = base.get("name") or it["manual_name"] or "Item"
+        it["description"] = base.get("description")
+        it["specifications"] = base.get("specifications") or []
+        it["features"] = base.get("features") or []
+        it["image_url"] = base.get("image_url")
+        it["is_manual"] = base.get("is_manual", not it.get("item_id"))
+
+        ov = it.get("overrides")
+        if isinstance(ov, dict):
+            if ov.get("description") is not None:
+                it["description"] = ov["description"]
+            if isinstance(ov.get("specifications"), list):
+                it["specifications"] = ov["specifications"]
+            if isinstance(ov.get("features"), list):
+                it["features"] = ov["features"]
+
+
+def _load_catalog_batch_cur(items: list[dict], cur) -> dict:
+    """Igual que _load_catalog_batch pero reutilizando un cursor (una sola conexión)."""
+    ids = {"machine_products": set(), "spare_parts": set(), "services": set()}
+    for it in items:
+        table = {
+            "machine": "machine_products",
+            "repuesto": "spare_parts",
+            "service": "services",
+        }.get(it.get("item_type"))
+        if table and it.get("item_id"):
+            ids[table].add(it["item_id"])
+    catalogs = {}
+    for table, table_ids in ids.items():
+        if not table_ids:
+            catalogs[table] = {}
+            continue
         cols = "name, description, specifications, features, image_url"
         if table == "services":
             cols = "name, image_url"
-        row = db.fetch_one(f"SELECT {cols} FROM {table} WHERE id = %s", (item["item_id"],))
-        if row:
-            r = dict(row)
-            r["specifications"] = db.from_json(r.get("specifications"))
-            r["features"] = db.from_json(r.get("features"))
-            return r
-    return base
+        cur.execute(
+            f"SELECT id, {cols} FROM {table} WHERE id = ANY(%s) AND NOT deleted",
+            (list(table_ids),),
+        )
+        catalogs[table] = {}
+        for r in cur.fetchall():
+            item = dict(r)
+            item["specifications"] = db.from_json(item.get("specifications"))
+            item["features"] = db.from_json(item.get("features"))
+            catalogs[table][item["id"]] = item
+    return catalogs
+
+
+def _serialize_sales(rows) -> list:
+    """Serializa muchas ventas a la vez (volcado por lotes para evitar N+1)."""
+    if not rows:
+        return []
+    sale_ids = [r["id"] for r in rows]
+
+    conn = db.get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM sale_items WHERE sale_id = ANY(%s) ORDER BY sale_id, id",
+                (sale_ids,),
+            )
+            items_rows = cur.fetchall()
+
+            items_by_sale = {}
+            all_items = []
+            for it in items_rows:
+                it = dict(it)
+                if it.get("overrides"):
+                    it["overrides"] = db.from_json(it["overrides"])
+                items_by_sale.setdefault(it["sale_id"], []).append(it)
+                all_items.append(it)
+
+            catalogs = _load_catalog_batch_cur(all_items, cur)
+            _resolve_item_details_batch(all_items, catalogs)
+
+            client_ids = list({r["client_id"] for r in rows if r.get("client_id")})
+            advisor_ids = list({r["advisor_id"] for r in rows if r.get("advisor_id")})
+            clients_dni = {}
+            clients_ruc = {}
+            advisors = {}
+            if client_ids:
+                cur.execute(
+                    "SELECT id, names, last_names, dni, deleted FROM clients WHERE id = ANY(%s)",
+                    (client_ids,),
+                )
+                for c in cur.fetchall():
+                    clients_dni[c["id"]] = dict(c)
+                cur.execute(
+                    "SELECT id, razonsocial, ruc, deleted FROM clients_ruc WHERE id = ANY(%s)",
+                    (client_ids,),
+                )
+                for c in cur.fetchall():
+                    clients_ruc[c["id"]] = dict(c)
+            if advisor_ids:
+                cur.execute(
+                    "SELECT id, name FROM advisors WHERE id = ANY(%s)",
+                    (advisor_ids,),
+                )
+                for a in cur.fetchall():
+                    advisors[a["id"]] = dict(a)
+
+        out = []
+        for row in rows:
+            sale = dict(row)
+            sale["items"] = [dict(x) for x in items_by_sale.get(sale["id"], [])]
+            if sale.get("client_id"):
+                if sale.get("client_type") == "ruc":
+                    sale["client"] = clients_ruc.get(sale["client_id"]) or None
+                else:
+                    sale["client"] = clients_dni.get(sale["client_id"]) or None
+            else:
+                sale["client"] = None
+            sale["advisor"] = advisors.get(sale["advisor_id"]) or None
+            out.append(sale)
+        return out
+    finally:
+        db.close_conn(conn)
 
 
 def _serialize_sale(row: dict) -> dict:
-    items = db.fetch_all(
-        "SELECT * FROM sale_items WHERE sale_id = %s ORDER BY id", (row["id"],)
-    )
-    sale = dict(row)
-    sale["items"] = []
-    for i in items:
-        it = dict(i)
-        details = _resolve_item_details(it)
-        it["name"] = details.get("name") or it["manual_name"] or "Item"
-        it["description"] = details.get("description")
-        it["specifications"] = details.get("specifications") or []
-        it["features"] = details.get("features") or []
-        it["image_url"] = details.get("image_url")
-        it["is_manual"] = details.get("is_manual", not it.get("item_id"))
-        sale["items"].append(it)
-
-    if sale.get("client_id"):
-        try:
-            if sale.get("client_type") == "ruc":
-                c = db.fetch_one(
-                    "SELECT id, razonsocial, ruc, deleted FROM clients_ruc WHERE id = %s",
-                    (sale["client_id"],),
-                )
-                sale["client"] = dict(c) if c else None
-            else:
-                c = db.fetch_one(
-                    "SELECT id, names, last_names, dni, deleted FROM clients WHERE id = %s",
-                    (sale["client_id"],),
-                )
-                sale["client"] = dict(c) if c else None
-        except Exception:
-            sale["client"] = None
-    else:
-        sale["client"] = None
-
-    if sale.get("advisor_id"):
-        a = db.fetch_one(
-            "SELECT id, name FROM advisors WHERE id = %s", (sale["advisor_id"],)
-        )
-        sale["advisor"] = dict(a) if a else None
-    else:
-        sale["advisor"] = None
-    return sale
+    return _serialize_sales([row])[0]
 
 
 @app.get("/api/sales")
@@ -527,7 +631,7 @@ def list_sales(include_deleted: bool = False, _: dict = Depends(require_auth)):
     def run():
         wh = "" if include_deleted else "WHERE NOT deleted"
         rows = db.fetch_all(f"SELECT * FROM sales {wh} ORDER BY created_at DESC, id DESC")
-        return [_serialize_sale(dict(r)) for r in rows]
+        return _serialize_sales(rows)
     return _conn_or_400(run)
 
 
@@ -597,14 +701,15 @@ def create_sale(payload: dict, _: dict = Depends(require_auth)):
                     cur.execute(
                         """INSERT INTO sale_items
                            (sale_id, item_type, item_id, manual_name, manual_description,
-                            quantity, unit_price)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                            overrides, quantity, unit_price)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
                         (
                             sale_row["id"],
                             item.get("item_type"),
                             item.get("item_id"),
                             item.get("manual_name"),
                             item.get("manual_description"),
+                            db.to_json(item.get("overrides")),
                             item.get("quantity", 1),
                             item.get("unit_price", 0),
                         ),
@@ -673,14 +778,15 @@ def update_sale(sale_id: int, payload: dict, _: dict = Depends(require_auth)):
                     cur.execute(
                         """INSERT INTO sale_items
                            (sale_id, item_type, item_id, manual_name, manual_description,
-                            quantity, unit_price)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                            overrides, quantity, unit_price)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
                         (
                             sale_id,
                             item.get("item_type"),
                             item.get("item_id"),
                             item.get("manual_name"),
                             item.get("manual_description"),
+                            db.to_json(item.get("overrides")),
                             item.get("quantity", 1),
                             item.get("unit_price", 0),
                         ),

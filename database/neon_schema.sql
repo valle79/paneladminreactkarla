@@ -133,10 +133,38 @@ CREATE TABLE IF NOT EXISTS public.clients_ruc (
     provincia VARCHAR(100),
     distrito VARCHAR(100),
     ubigeo VARCHAR(10),
+    via_tipo VARCHAR(20),
+    via_nombre VARCHAR(200),
+    zona_codigo VARCHAR(20),
+    zona_tipo VARCHAR(200),
+    numero VARCHAR(20),
+    interior VARCHAR(20),
+    lote VARCHAR(20),
+    dpto VARCHAR(20),
+    manzana VARCHAR(20),
+    kilometro VARCHAR(20),
+    es_agente_retencion BOOLEAN DEFAULT false,
+    es_buen_contribuyente BOOLEAN DEFAULT false,
+    locales_anexos TEXT,
     capital NUMERIC(12, 2),
     deleted BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
 );
+
+ALTER TABLE public.clients_ruc
+    ADD COLUMN IF NOT EXISTS via_tipo VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS via_nombre VARCHAR(200),
+    ADD COLUMN IF NOT EXISTS zona_codigo VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS zona_tipo VARCHAR(200),
+    ADD COLUMN IF NOT EXISTS numero VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS interior VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS lote VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS dpto VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS manzana VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS kilometro VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS es_agente_retencion BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS es_buen_contribuyente BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS locales_anexos TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_clients_ruc_deleted ON public.clients_ruc(deleted);
 CREATE INDEX IF NOT EXISTS idx_clients_ruc_ruc ON public.clients_ruc(ruc);
@@ -179,11 +207,15 @@ CREATE TABLE IF NOT EXISTS public.sale_items (
     item_id BIGINT,
     manual_name VARCHAR(200),
     manual_description TEXT,
+    overrides TEXT,
     quantity NUMERIC(12, 2) DEFAULT 1 NOT NULL,
     unit_price NUMERIC(12, 2) DEFAULT 0 NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON public.sale_items(sale_id);
+
+ALTER TABLE public.sale_items
+    ADD COLUMN IF NOT EXISTS overrides TEXT;
 
 -- ============================================================================
 -- FUNCIÓN + TRIGGER: actualizar updated_at automáticamente

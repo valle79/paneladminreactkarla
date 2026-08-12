@@ -14,6 +14,12 @@ export const COMPANY = {
     name: 'LILI CAICO R.',
     role: 'Área de Ventas y Servicios',
   },
+  footer: {
+    thanks: 'Gracias por su preferencia, te esperamos pronto.',
+    tagline: 'Fabricaciones & Servicios El Iqueño SAC | Calidad y confianza en cada proyecto',
+    contact:
+      'RUC: 20491400294 | Jr. Augusto B. Leguia Nº 523. Imperial Cañete, Lima - Perú | Tel: +51 958 840 599 | Email: eliquenosac.lili@gmail.com',
+  },
 };
 
 export const PROFORMA_DEFAULTS = {

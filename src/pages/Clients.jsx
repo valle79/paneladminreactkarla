@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Save, X, UserRound, Building2, RotateCcw, Phone } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, UserRound, Building2, RotateCcw, Phone, BadgeCheck } from 'lucide-react';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
@@ -9,6 +9,10 @@ const emptyDni = { dni: '', names: '', last_names: '', address: '' };
 const emptyRuc = {
   ruc: '', razonsocial: '', nombrecomercial: '', telefonos: '',
   direccion: '', departamento: '', provincia: '', distrito: '',
+  ubigeo: '', estado: '', condicion: '',
+  via_tipo: '', via_nombre: '', zona_codigo: '', zona_tipo: '',
+  numero: '', interior: '', lote: '', dpto: '', manzana: '', kilometro: '',
+  es_agente_retencion: false, es_buen_contribuyente: false, locales_anexos: '',
 };
 
 function DniTab() {
@@ -19,6 +23,8 @@ function DniTab() {
   const [form, setForm] = useState(emptyDni);
   const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [consulting, setConsulting] = useState(false);
+  const [source, setSource] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -30,8 +36,25 @@ function DniTab() {
 
   const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.names, (r) => r.last_names, (r) => r.dni]);
 
-  const openAdd = () => { setEditingId(null); setForm(emptyDni); setModal(true); };
-  const openEdit = (r) => { setEditingId(r.id); setForm({ dni: r.dni, names: r.names, last_names: r.last_names, address: r.address }); setModal(true); };
+  const openAdd = () => { setEditingId(null); setForm(emptyDni); setSource(''); setModal(true); };
+  const openEdit = (r) => { setEditingId(r.id); setForm({ dni: r.dni, names: r.names, last_names: r.last_names, address: r.address }); setSource(''); setModal(true); };
+
+  const consultarDni = async () => {
+    const dni = form.dni.replace(/\D/g, '');
+    if (!/^\d{8}$/.test(dni)) return toast.warning('Ingresa un DNI de 8 dígitos para consultar en RENIEC');
+    setConsulting(true);
+    setSource('');
+    try {
+      const { data } = await api.post('/consultar/dni', { dni });
+      setForm((f) => ({
+        ...f,
+        names: data.nombres || f.names,
+        last_names: data.apellidos || f.last_names,
+        address: data.direccion || f.address,
+      }));
+      setSource(data.fuente || 'RENIEC');
+    } catch (e) { toast.error(errMsg(e)); } finally { setConsulting(false); }
+  };
 
   const save = async () => {
     if (!form.dni || !/^\d{8}$/.test(form.dni)) return toast.warning('El DNI debe tener 8 dígitos');
@@ -128,7 +151,13 @@ function DniTab() {
       >
         <div className="field">
           <label>DNI <span className="req">*</span></label>
-          <input className="input" maxLength={8} placeholder="8 dígitos" value={form.dni} onChange={(e) => setForm({ ...form, dni: e.target.value.replace(/\D/g, '') })} />
+          <div className="flex" style={{ gap: 8 }}>
+            <input className="input" maxLength={8} placeholder="8 dígitos" value={form.dni} onChange={(e) => setForm({ ...form, dni: e.target.value.replace(/\D/g, '') })} />
+            <button type="button" className="btn btn-yellow" style={{ minWidth: 120, flexShrink: 0 }} onClick={consultarDni} disabled={consulting}>
+              {consulting ? <span className="spinner" /> : <BadgeCheck size={15} />} Consultar
+            </button>
+          </div>
+          {source && <div className="hint" style={{ marginTop: 4 }}>Datos obtenidos de {source}</div>}
         </div>
         <div className="grid-2">
           <div className="field"><label>Nombres <span className="req">*</span></label><input className="input" value={form.names} onChange={(e) => setForm({ ...form, names: e.target.value })} /></div>
@@ -149,6 +178,8 @@ function RucTab() {
   const [form, setForm] = useState(emptyRuc);
   const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [consulting, setConsulting] = useState(false);
+  const [source, setSource] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -160,15 +191,58 @@ function RucTab() {
 
   const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.razonsocial, (r) => r.ruc, (r) => r.nombrecomercial]);
 
-  const openAdd = () => { setEditingId(null); setForm(emptyRuc); setModal(true); };
+  const openAdd = () => { setEditingId(null); setForm(emptyRuc); setSource(''); setModal(true); };
   const openEdit = (r) => {
     setEditingId(r.id);
     setForm({
       ruc: r.ruc, razonsocial: r.razonsocial, nombrecomercial: r.nombrecomercial,
       telefonos: Array.isArray(r.telefonos) ? r.telefonos.join(', ') : r.telefonos || '',
       direccion: r.direccion, departamento: r.departamento, provincia: r.provincia, distrito: r.distrito,
+      ubigeo: r.ubigeo, estado: r.estado, condicion: r.condicion,
+      via_tipo: r.via_tipo, via_nombre: r.via_nombre, zona_codigo: r.zona_codigo, zona_tipo: r.zona_tipo,
+      numero: r.numero, interior: r.interior, lote: r.lote, dpto: r.dpto, manzana: r.manzana, kilometro: r.kilometro,
+      es_agente_retencion: !!r.es_agente_retencion, es_buen_contribuyente: !!r.es_buen_contribuyente,
+      locales_anexos: Array.isArray(r.locales_anexos) ? JSON.stringify(r.locales_anexos) : (r.locales_anexos || ''),
     });
+    setSource('');
     setModal(true);
+  };
+
+  const consultarRuc = async () => {
+    const ruc = form.ruc.replace(/\D/g, '');
+    if (!/^\d{11}$/.test(ruc)) return toast.warning('Ingresa un RUC de 11 dígitos para consultar en SUNAT');
+    setConsulting(true);
+    setSource('');
+    try {
+      const { data } = await api.post('/consultar/ruc', { ruc });
+      setForm((f) => ({
+        ...f,
+        ruc: data.numero_documento || f.ruc,
+        razonsocial: data.razon_social || f.razonsocial,
+        nombrecomercial: data.nombre_comercial || f.nombrecomercial,
+        direccion: data.direccion || f.direccion,
+        departamento: data.departamento || f.departamento,
+        provincia: data.provincia || f.provincia,
+        distrito: data.distrito || f.distrito,
+        ubigeo: data.ubigeo || f.ubigeo,
+        estado: data.estado || f.estado,
+        condicion: data.condicion || f.condicion,
+        via_tipo: data.via_tipo || f.via_tipo,
+        via_nombre: data.via_nombre || f.via_nombre,
+        zona_codigo: data.zona_codigo || f.zona_codigo,
+        zona_tipo: data.zona_tipo || f.zona_tipo,
+        numero: data.numero || f.numero,
+        interior: data.interior || f.interior,
+        lote: (data.lote && data.lote !== '-') ? data.lote : f.lote,
+        dpto: (data.dpto && data.dpto !== '-') ? data.dpto : f.dpto,
+        manzana: (data.manzana && data.manzana !== '-') ? data.manzana : f.manzana,
+        kilometro: (data.kilometro && data.kilometro !== '-') ? data.kilometro : f.kilometro,
+        es_agente_retencion: !!data.es_agente_retencion,
+        es_buen_contribuyente: !!data.es_buen_contribuyente,
+        locales_anexos: Array.isArray(data.locales_anexos) ? JSON.stringify(data.locales_anexos) : (data.locales_anexos || ''),
+      }));
+      setSource(data.fuente || 'SUNAT');
+    } catch (e) { toast.error(errMsg(e)); } finally { setConsulting(false); }
   };
 
   const save = async () => {
@@ -275,19 +349,54 @@ function RucTab() {
           </>
         }
       >
+        <div className="field">
+          <label>RUC <span className="req">*</span></label>
+          <div className="flex" style={{ gap: 8 }}>
+            <input className="input" maxLength={11} placeholder="11 dígitos" value={form.ruc} onChange={(e) => setForm({ ...form, ruc: e.target.value.replace(/\D/g, '') })} />
+            <button type="button" className="btn btn-yellow" style={{ minWidth: 120, flexShrink: 0 }} onClick={consultarRuc} disabled={consulting}>
+              {consulting ? <span className="spinner" /> : <BadgeCheck size={15} />} Consultar
+            </button>
+          </div>
+          {source && <div className="hint" style={{ marginTop: 4 }}>Datos obtenidos de {source}</div>}
+        </div>
         <div className="grid-2">
-          <div className="field"><label>RUC <span className="req">*</span></label><input className="input" maxLength={11} placeholder="11 dígitos" value={form.ruc} onChange={(e) => setForm({ ...form, ruc: e.target.value.replace(/\D/g, '') })} /></div>
           <div className="field"><label>Razón social <span className="req">*</span></label><input className="input" value={form.razonsocial} onChange={(e) => setForm({ ...form, razonsocial: e.target.value })} /></div>
+          <div className="field"><label>Nombre comercial</label><input className="input" value={form.nombrecomercial} onChange={(e) => setForm({ ...form, nombrecomercial: e.target.value })} /></div>
         </div>
         <div className="grid-2">
-          <div className="field"><label>Nombre comercial</label><input className="input" value={form.nombrecomercial} onChange={(e) => setForm({ ...form, nombrecomercial: e.target.value })} /></div>
           <div className="field"><label>Teléfonos (separados por coma)</label><input className="input" placeholder="964123456, 064123456" value={form.telefonos} onChange={(e) => setForm({ ...form, telefonos: e.target.value })} /></div>
+          <div className="field"><label>Dirección</label><input className="input" value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} /></div>
         </div>
-        <div className="field"><label>Dirección</label><input className="input" value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} /></div>
         <div className="grid-3">
           <div className="field"><label>Departamento</label><input className="input" value={form.departamento} onChange={(e) => setForm({ ...form, departamento: e.target.value })} /></div>
           <div className="field"><label>Provincia</label><input className="input" value={form.provincia} onChange={(e) => setForm({ ...form, provincia: e.target.value })} /></div>
           <div className="field"><label>Distrito</label><input className="input" value={form.distrito} onChange={(e) => setForm({ ...form, distrito: e.target.value })} /></div>
+        </div>
+        <div className="grid-3">
+          <div className="field"><label>Ubigeo</label><input className="input" value={form.ubigeo} onChange={(e) => setForm({ ...form, ubigeo: e.target.value })} /></div>
+          <div className="field"><label>Estado</label><input className="input" value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value })} /></div>
+          <div className="field"><label>Condición</label><input className="input" value={form.condicion} onChange={(e) => setForm({ ...form, condicion: e.target.value })} /></div>
+        </div>
+        <div className="grid-3">
+          <div className="field"><label>Tipo de vía</label><input className="input" value={form.via_tipo} onChange={(e) => setForm({ ...form, via_tipo: e.target.value })} /></div>
+          <div className="field"><label>Nombre de vía</label><input className="input" value={form.via_nombre} onChange={(e) => setForm({ ...form, via_nombre: e.target.value })} /></div>
+          <div className="field"><label>Número</label><input className="input" value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} /></div>
+        </div>
+        <div className="grid-4">
+          <div className="field"><label>Interior</label><input className="input" value={form.interior} onChange={(e) => setForm({ ...form, interior: e.target.value })} /></div>
+          <div className="field"><label>Lote</label><input className="input" value={form.lote} onChange={(e) => setForm({ ...form, lote: e.target.value })} /></div>
+          <div className="field"><label>Dpto</label><input className="input" value={form.dpto} onChange={(e) => setForm({ ...form, dpto: e.target.value })} /></div>
+          <div className="field"><label>Manzana</label><input className="input" value={form.manzana} onChange={(e) => setForm({ ...form, manzana: e.target.value })} /></div>
+        </div>
+        <div className="grid-4">
+          <div className="field"><label>Kilómetro</label><input className="input" value={form.kilometro} onChange={(e) => setForm({ ...form, kilometro: e.target.value })} /></div>
+          <div className="field"><label>Código de zona</label><input className="input" value={form.zona_codigo} onChange={(e) => setForm({ ...form, zona_codigo: e.target.value })} /></div>
+          <div className="field"><label>Tipo de zona</label><input className="input" value={form.zona_tipo} onChange={(e) => setForm({ ...form, zona_tipo: e.target.value })} /></div>
+          <div className="field"><label>Locales anexos</label><input className="input" placeholder="JSON o texto" value={form.locales_anexos} onChange={(e) => setForm({ ...form, locales_anexos: e.target.value })} /></div>
+        </div>
+        <div className="grid-2" style={{ marginTop: 8 }}>
+          <label className="check"><input type="checkbox" checked={form.es_agente_retencion} onChange={(e) => setForm({ ...form, es_agente_retencion: e.target.checked })} /> Agente de retención</label>
+          <label className="check"><input type="checkbox" checked={form.es_buen_contribuyente} onChange={(e) => setForm({ ...form, es_buen_contribuyente: e.target.checked })} /> Buen contribuyente</label>
         </div>
       </Modal>
       {ConfirmDialog}

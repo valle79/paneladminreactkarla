@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Pencil, Trash2, ShoppingCart, Save, X, FilePlus2, Eye, User,
-  UserRound, CircleDollarSign, Printer,
+  UserRound, CircleDollarSign, Printer, SlidersHorizontal,
 } from 'lucide-react';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
@@ -47,6 +47,8 @@ export default function Sales() {
   const [cats, setCats] = useState(null);
   const [failed, setFailed] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [specIdx, setSpecIdx] = useState(null);
+  const [specForm, setSpecForm] = useState({ description: '', specifications: [], features: [] });
 
   const load = () => {
     setFailed(false);
@@ -79,6 +81,7 @@ export default function Sales() {
       manual_description: i.manual_description || null,
       quantity: Number(i.quantity) || 1,
       unit_price: Number(i.unit_price) || 0,
+      overrides: i.overrides || null,
     })),
   });
 
@@ -110,15 +113,17 @@ export default function Sales() {
         it.item_type !== 'manual'
           ? (cats?.[it.item_type] || []).find((c) => String(c.id) === String(it.item_id))
           : null;
+      const ov = it.overrides || null;
       return {
         name: found?.name || it.manual_name || 'Item',
-        description: found?.description,
-        specifications: found?.specifications || [],
-        features: found?.features || [],
+        description: ov?.description != null ? ov.description : found?.description,
+        specifications: ov?.specifications || found?.specifications || [],
+        features: ov?.features || found?.features || [],
         is_manual: it.item_type === 'manual',
         manual_description: it.manual_description,
         quantity: it.quantity,
         unit_price: it.unit_price,
+        image_url: found?.image_url,
       };
     });
 
@@ -190,6 +195,7 @@ export default function Sales() {
         item_type: i.item_type, item_id: i.item_id, manual_name: i.manual_name || '',
         manual_description: i.manual_description || '',
         quantity: i.quantity, unit_price: i.unit_price, selected: i.item_id ?? `${i.manual_name}`,
+        overrides: i.overrides || null,
       })),
     });
     setModal(true);
@@ -197,29 +203,17 @@ export default function Sales() {
 
   useEffect(() => {
     if (!modal) return;
-    api
-      .get('/advisors')
-      .then((r) => setCats((c) => ({ ...(c || {}), advisors: r.data })))
-      .catch(() => {});
-    api
-      .get('/clients')
-      .then((r) => setCats((c) => ({ ...(c || {}), clients: r.data })))
-      .catch(() => {});
-    api
-      .get('/clients-ruc')
-      .then((r) => setCats((c) => ({ ...(c || {}), ruc: r.data })))
-      .catch(() => {});
-    api
-      .get('/products')
-      .then((r) => setCats((c) => ({ ...(c || {}), machine: r.data })))
-      .catch(() => {});
-    api
-      .get('/spare-parts')
-      .then((r) => setCats((c) => ({ ...(c || {}), repuesto: r.data })))
-      .catch(() => {});
-    api
-      .get('/services')
-      .then((r) => setCats((c) => ({ ...(c || {}), service: r.data })))
+    Promise.all([
+      api.get('/advisors'),
+      api.get('/clients'),
+      api.get('/clients-ruc'),
+      api.get('/products'),
+      api.get('/spare-parts'),
+      api.get('/services'),
+    ])
+      .then(([a, c, r, p, s, sv]) =>
+        setCats((old) => ({ ...(old || {}), advisors: a.data, clients: c.data, ruc: r.data, machine: p.data, repuesto: s.data, service: sv.data }))
+      )
       .catch(() => {});
   }, [modal]);
 
@@ -273,6 +267,39 @@ export default function Sales() {
   };
 
   const removeItem = (idx) => setForm((f) => ({ ...f, items: f.items.filter((_, j) => j !== idx) }));
+
+  /* ---- Editor de características (specs/features/descripción del item) ---- */
+  const openSpecs = (idx) => {
+    const it = form.items[idx];
+    const found =
+      it.item_type !== 'manual'
+        ? (cats?.[it.item_type] || []).find((c) => String(c.id) === String(it.item_id))
+        : null;
+    const ov = it.overrides || {};
+    setSpecForm({
+      description: ov.description != null ? ov.description : (found?.description || ''),
+      specifications: (ov.specifications || found?.specifications || []).map((s) => ({ ...s })),
+      features: [...(ov.features || found?.features || [])],
+    });
+    setSpecIdx(idx);
+  };
+  const closeSpecs = () => setSpecIdx(null);
+  const saveSpecs = () => {
+    setItemField(specIdx, 'overrides', {
+      description: specForm.description || null,
+      specifications: specForm.specifications.filter((s) => s.label || s.value),
+      features: specForm.features.map((f) => f.trim()).filter(Boolean),
+    });
+    closeSpecs();
+  };
+  const setSpecField = (key, value) => setSpecForm((f) => ({ ...f, [key]: value }));
+  const setSpecRow = (i, key, value) =>
+    setSpecForm((f) => ({ ...f, specifications: f.specifications.map((s, j) => (j === i ? { ...s, [key]: value } : s)) }));
+  const addSpec = () => setSpecForm((f) => ({ ...f, specifications: [...f.specifications, { label: '', value: '' }] }));
+  const removeSpec = (i) => setSpecForm((f) => ({ ...f, specifications: f.specifications.filter((_, j) => j !== i) }));
+  const setFeature = (i, value) => setSpecForm((f) => ({ ...f, features: f.features.map((x, j) => (j === i ? value : x)) }));
+  const addFeature = () => setSpecForm((f) => ({ ...f, features: [...f.features, ''] }));
+  const removeFeature = (i) => setSpecForm((f) => ({ ...f, features: f.features.filter((_, j) => j !== i) }));
 
   const paymentFields = (
     <div>
@@ -534,7 +561,10 @@ export default function Sales() {
                   <input className="input" type="number" min="0.01" step="0.01" value={it.quantity} onChange={(e) => setItemField(idx, 'quantity', e.target.value)} />
                   <input className="input" type="number" min="0" step="0.01" value={it.unit_price} onChange={(e) => setItemField(idx, 'unit_price', e.target.value)} />
                   <b className="money" style={{ fontSize: 13 }}>{fmtMoney(Number(it.quantity || 0) * Number(it.unit_price || 0))}</b>
-                  <button className="btn-icon danger" onClick={() => removeItem(idx)}><Trash2 size={14} /></button>
+                  <div className="flex" style={{ gap: 4 }}>
+                    <button className={`btn-icon ${it.overrides ? 'active' : ''}`} title="Editar características" onClick={() => openSpecs(idx)}><SlidersHorizontal size={14} /></button>
+                    <button className="btn-icon danger" onClick={() => removeItem(idx)}><Trash2 size={14} /></button>
+                  </div>
                 </div>
               );
             })}
@@ -646,6 +676,47 @@ export default function Sales() {
       </Modal>
 
       {ConfirmDialog}
+
+      {/* Editor de características del item */}
+      <Modal
+        open={specIdx !== null}
+        onClose={closeSpecs}
+        title="Editar características del item"
+        icon={<SlidersHorizontal size={18} />}
+        size="lg"
+        footer={
+          <>
+            <button className="btn btn-ghost" onClick={closeSpecs}><X size={15} /> Cancelar</button>
+            <button className="btn btn-primary" onClick={saveSpecs}><Save size={15} /> Guardar cambios</button>
+          </>
+        }
+      >
+        <div className="field">
+          <label>Descripción</label>
+          <textarea className="textarea" rows={3} value={specForm.description} onChange={(e) => setSpecField('description', e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Especificaciones</label>
+          {specForm.specifications.map((s, i) => (
+            <div className="flex" style={{ marginBottom: 6 }} key={i}>
+              <input className="input" placeholder="Label (ej. Potencia)" value={s.label} onChange={(e) => setSpecRow(i, 'label', e.target.value)} />
+              <input className="input" placeholder="Valor (ej. 70 HP)" value={s.value} onChange={(e) => setSpecRow(i, 'value', e.target.value)} />
+              <button className="btn-icon danger" onClick={() => removeSpec(i)}><Trash2 size={14} /></button>
+            </div>
+          ))}
+          <button className="btn btn-outline btn-sm" onClick={addSpec}><Plus size={13} /> Agregar especificación</button>
+        </div>
+        <div className="field">
+          <label>Características</label>
+          {specForm.features.map((f, i) => (
+            <div className="flex" style={{ marginBottom: 6 }} key={i}>
+              <input className="input" value={f} onChange={(e) => setFeature(i, e.target.value)} />
+              <button className="btn-icon danger" onClick={() => removeFeature(i)}><Trash2 size={14} /></button>
+            </div>
+          ))}
+          <button className="btn btn-outline btn-sm" onClick={addFeature}><Plus size={13} /> Agregar característica</button>
+        </div>
+      </Modal>
 
       <ProformaModal
         open={!!preview}
