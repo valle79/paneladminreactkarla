@@ -62,183 +62,188 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
 
   return (
     <div className="proforma-page" ref={ref}>
-      {/* Doble línea de corte clásica */}
-      <div className="proforma-rule" />
+      {/* Primera página - contenido principal */}
+      <div className="proforma-main-page">
+        {/* Doble línea de corte clásica */}
+        <div className="proforma-rule" />
 
-      {/* Encabezado */}
-      <div className="proforma-head">
-        <div className="proforma-brand">
-          <div className="proforma-name">{COMPANY.name}</div>
-          <div className="proforma-meta">
-            RUC: <b>{COMPANY.ruc}</b> · {COMPANY.address}
+        {/* Encabezado */}
+        <div className="proforma-head">
+          <div className="proforma-brand">
+            <div className="proforma-name">{COMPANY.name}</div>
+            <div className="proforma-meta">
+              RUC: <b>{COMPANY.ruc}</b> · {COMPANY.address}
+            </div>
+            <div className="proforma-contacts">
+              <span>✉ {COMPANY.emails.join(' / ')}</span>
+              <span>☎ {COMPANY.phones.join(' / ')}</span>
+            </div>
           </div>
-          <div className="proforma-contacts">
-            <span>✉ {COMPANY.emails.join(' / ')}</span>
-            <span>☎ {COMPANY.phones.join(' / ')}</span>
+          <img src={logoElIqueno} alt="El Iqueño" className="proforma-logo" />
+        </div>
+        <div className="proforma-doc">
+          <div className="proforma-doc-number">
+            {formatDocNumber(sale.invoice_type, sale.invoice_number)}
+          </div>
+          <div className="proforma-doc-date">
+            FECHA: <b>{fechaDoc}</b>
+            <span className="proforma-doc-time">HORA: <b>{horaDoc}</b></span>
           </div>
         </div>
-        <img src={logoElIqueno} alt="El Iqueño" className="proforma-logo" />
-      </div>
-      <div className="proforma-doc">
-        <div className="proforma-doc-number">
-          {formatDocNumber(sale.invoice_type, sale.invoice_number)}
-        </div>
-        <div className="proforma-doc-date">
-          FECHA: <b>{fechaDoc}</b>
-          <span className="proforma-doc-time">HORA: <b>{horaDoc}</b></span>
-        </div>
-      </div>
 
-      {/* Cliente */}
-      <div className="proforma-client">
-        <div className="proforma-client-col">
-          <div className="proforma-client-label">SEÑORES:</div>
-          <div className="proforma-client-value">{clienteLinea}</div>
+        {/* Cliente */}
+        <div className="proforma-client">
+          <div className="proforma-client-col">
+            <div className="proforma-client-label">SEÑORES:</div>
+            <div className="proforma-client-value">{clienteLinea}</div>
+          </div>
+          <div className="proforma-client-col">
+            <div className="proforma-client-label">{client.dni ? 'DNI' : 'RUC'}:</div>
+            <div className="proforma-client-value">{docRuc}</div>
+          </div>
+          <div className="proforma-client-col">
+            <div className="proforma-client-label">ATENCIÓN:</div>
+            <div className="proforma-client-value">{sale.advisor_name || '—'}</div>
+          </div>
+          <div className="proforma-client-col">
+            <div className="proforma-client-label">DIRECCIÓN:</div>
+            <div className="proforma-client-value">{client.address || client.direccion || '—'}</div>
+          </div>
         </div>
-        <div className="proforma-client-col">
-          <div className="proforma-client-label">{client.dni ? 'DNI' : 'RUC'}:</div>
-          <div className="proforma-client-value">{docRuc}</div>
-        </div>
-        <div className="proforma-client-col">
-          <div className="proforma-client-label">ATENCIÓN:</div>
-          <div className="proforma-client-value">{sale.advisor_name || '—'}</div>
-        </div>
-        <div className="proforma-client-col">
-          <div className="proforma-client-label">DIRECCIÓN:</div>
-          <div className="proforma-client-value">{client.address || client.direccion || '—'}</div>
-        </div>
-      </div>
 
-      {/* Tabla de items */}
-      <table className="proforma-table">
-        <thead>
-          <tr>
-            <th className="pt-cant">CANT.</th>
-            <th>DESCRIPCIÓN</th>
-            <th className="pt-price">P. UNIT.</th>
-            <th className="pt-price">TOTAL</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(sale.items || []).map((item, i) => (
-            <tr key={i}>
-              <td className="pt-cant" style={{ textAlign: 'center' }}>{item.quantity}</td>
-              <td>
-                <div className="pt-item-name">{item.name}</div>
-                {descriptionLine(item)}
-              </td>
-              <td className="pt-price money">{formatMoneyPLN(item.unit_price)}</td>
-              <td className="pt-price money"><b>{formatMoneyPLN(Number(item.quantity || 0) * Number(item.unit_price || 0))}</b></td>
+        {/* Tabla de items */}
+        <table className="proforma-table">
+          <thead>
+            <tr>
+              <th className="pt-cant">CANT.</th>
+              <th>DESCRIPCIÓN</th>
+              <th className="pt-price">P. UNIT.</th>
+              <th className="pt-price">TOTAL</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {(sale.items || []).map((item, i) => (
+              <tr key={i}>
+                <td className="pt-cant" style={{ textAlign: 'center' }}>{item.quantity}</td>
+                <td>
+                  <div className="pt-item-name">{item.name}</div>
+                  {descriptionLine(item)}
+                </td>
+                <td className="pt-price money">{formatMoneyPLN(item.unit_price)}</td>
+                <td className="pt-price money"><b>{formatMoneyPLN(Number(item.quantity || 0) * Number(item.unit_price || 0))}</b></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-      {/* Totales */}
-      <div className="proforma-totals">
-        <div className="proforma-totals-left">
-          {!isProformaLike && <div className="proforma-total-note">MONEDA: {o.moneda}</div>}
-        </div>
-        <div className="proforma-totals-right">
-          <div className="pt-line"><span>VALOR DE VENTA</span><b>{formatMoneyPLN(sub)}</b></div>
-          <div className="pt-line"><span>IGV (18%)</span><b>{formatMoneyPLN(igv)}</b></div>
-          <div className="pt-line pt-line-total"><span>PRECIO DE VENTA</span><b>{formatMoneyPLN(total)}</b></div>
-        </div>
-      </div>
-
-      {isProformaLike && (
-        <>
-          {/* Condiciones */}
-          <div className="proforma-cond">
-            <table className="proforma-cond-table">
-              <tbody>
-                <tr>
-                  <td className="pc-label">MONEDA</td>
-                  <td className="pc-value"><b>:</b> {o.moneda}</td>
-                </tr>
-                <tr>
-                  <td className="pc-label">VALIDEZ</td>
-                  <td className="pc-value"><b>:</b> {o.validez}</td>
-                </tr>
-                <tr>
-                  <td className="pc-label">FORMA DE PAGO</td>
-                  <td className="pc-value"><b>:</b> {o.formaDePago}</td>
-                </tr>
-                <tr>
-                  <td className="pc-label">ENTREGA</td>
-                  <td className="pc-value"><b>:</b> {o.entrega}</td>
-                </tr>
-                <tr>
-                  <td className="pc-label">CUENTA</td>
-                  <td className="pc-value"><b>:</b> {COMPANY.bank.name}: <b>{COMPANY.bank.account}</b> ({COMPANY.bank.type})</td>
-                </tr>
-              </tbody>
-            </table>
+        {/* Totales */}
+        <div className="proforma-totals">
+          <div className="proforma-totals-left">
+            {!isProformaLike && <div className="proforma-total-note">MONEDA: {o.moneda}</div>}
           </div>
-
-          {/* Carta */}
-          <div className="proforma-letter">
-            <p style={{ margin: 0 }}>
-              <b>ESTIMADOS SEÑORES:</b> En atención a su solicitud, nos es grato entregarle la siguiente propuesta.
-            </p>
-            <p style={{ margin: '6px 0 0 0' }}>
-              De aceptada nuestra oferta, agradeceremos emitir su grata orden de compra a nombre de{' '}
-              <b>{COMPANY.shortName}</b> para su pronta atención.
-            </p>
+          <div className="proforma-totals-right">
+            <div className="pt-line"><span>VALOR DE VENTA</span><b>{formatMoneyPLN(sub)}</b></div>
+            <div className="pt-line"><span>IGV (18%)</span><b>{formatMoneyPLN(igv)}</b></div>
+            <div className="pt-line pt-line-total"><span>PRECIO DE VENTA</span><b>{formatMoneyPLN(total)}</b></div>
           </div>
+        </div>
 
-          {/* Firma */}
+        {isProformaLike && (
+          <>
+            {/* Condiciones */}
+            <div className="proforma-cond">
+              <table className="proforma-cond-table">
+                <tbody>
+                  <tr>
+                    <td className="pc-label">MONEDA</td>
+                    <td className="pc-value"><b>:</b> {o.moneda}</td>
+                  </tr>
+                  <tr>
+                    <td className="pc-label">VALIDEZ</td>
+                    <td className="pc-value"><b>:</b> {o.validez}</td>
+                  </tr>
+                  <tr>
+                    <td className="pc-label">FORMA DE PAGO</td>
+                    <td className="pc-value"><b>:</b> {o.formaDePago}</td>
+                  </tr>
+                  <tr>
+                    <td className="pc-label">ENTREGA</td>
+                    <td className="pc-value"><b>:</b> {o.entrega}</td>
+                  </tr>
+                  <tr>
+                    <td className="pc-label">CUENTA</td>
+                    <td className="pc-value"><b>:</b> {COMPANY.bank.name}: <b>{COMPANY.bank.account}</b> ({COMPANY.bank.type})</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Carta */}
+            <div className="proforma-letter">
+              <p style={{ margin: 0 }}>
+                <b>ESTIMADOS SEÑORES:</b> En atención a su solicitud, nos es grato entregarle la siguiente propuesta.
+              </p>
+              <p style={{ margin: '6px 0 0 0' }}>
+                De aceptada nuestra oferta, agradeceremos emitir su grata orden de compra a nombre de{' '}
+                <b>{COMPANY.shortName}</b> para su pronta atención.
+              </p>
+            </div>
+
+            {/* Firma */}
+            <div className="proforma-sign">
+              <div className="proforma-sign-col">
+                <div className="proforma-sign-left-label">ATENTAMENTE</div>
+              </div>
+              <div className="proforma-sign-col">
+                <div className="proforma-sign-line" />
+                <div className="proforma-sign-name">{COMPANY.seller.name}</div>
+                <div className="proforma-sign-role">{COMPANY.seller.role}</div>
+                <div className="proforma-sign-company">{COMPANY.shortName}</div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {!isProformaLike && (
           <div className="proforma-sign">
+            <div className="proforma-sign-col">
+              <div className="proforma-sign-left-label">ATENTAMENTE</div>
+            </div>
             <div className="proforma-sign-col">
               <div className="proforma-sign-line" />
               <div className="proforma-sign-name">{COMPANY.seller.name}</div>
               <div className="proforma-sign-role">{COMPANY.seller.role}</div>
-            </div>
-            <div className="proforma-sign-col" style={{ alignItems: 'flex-end' }}>
-              <div className="proforma-sign-right-label">ATENTAMENTE</div>
-              <div className="proforma-sign-line" />
-              <div className="proforma-sign-name">{COMPANY.name}</div>
+              <div className="proforma-sign-company">{COMPANY.shortName}</div>
             </div>
           </div>
-        </>
-      )}
+        )}
 
-      {!isProformaLike && (
-        <div className="proforma-sign">
-          <div className="proforma-sign-col">
-            <div className="proforma-sign-line" />
-            <div className="proforma-sign-name">{COMPANY.seller.name}</div>
-            <div className="proforma-sign-role">{COMPANY.seller.role}</div>
-          </div>
-          <div className="proforma-sign-col" style={{ alignItems: 'flex-end' }}>
-            <div className="proforma-sign-right-label">ATENTAMENTE</div>
-            <div className="proforma-sign-line" />
-            <div className="proforma-sign-name">{COMPANY.name}</div>
-          </div>
+        <div className="proforma-doc-foot">
+          <DocFooter page={1} />
         </div>
-      )}
-
-      <div className="proforma-doc-foot">
-        <DocFooter page={1} />
       </div>
 
       {/* Fotos de referencia (siguiente hoja) */}
       {itemsConFoto.length > 0 && (
         <div className="proforma-photos">
-          <div className="proforma-photos-title">Fotos de referencia</div>
-          <div className="proforma-photos-grid">
-            {itemsConFoto.map((item, i) => (
-              <div className="proforma-photo-card" key={i}>
-                <img src={absImg(item.image_url)} alt={item.name} />
-                <div className="proforma-photo-name">{item.name}</div>
-                <div className="proforma-photo-tag">Foto referencial</div>
-              </div>
-            ))}
+          <div className="proforma-photos-content">
+            <div className="proforma-photos-title">Fotos de referencia</div>
+            <div className="proforma-photos-grid">
+              {itemsConFoto.map((item, i) => (
+                <div className="proforma-photo-card" key={i}>
+                  <img src={absImg(item.image_url)} alt={item.name} />
+                  <div className="proforma-photo-name">{item.name}</div>
+                  <div className="proforma-photo-tag">Foto referencial</div>
+                </div>
+              ))}
+            </div>
+            <div className="proforma-photos-note">
+              Las imágenes mostradas son referenciales; el producto final puede variar ligeramente según modelo y versión.
+            </div>
           </div>
-          <div className="proforma-photos-note">
-            Las imágenes mostradas son referenciales; el producto final puede variar ligeramente según modelo y versión.
+          <div className="proforma-doc-foot">
+            <DocFooter page={2} />
           </div>
-          <DocFooter page={2} />
         </div>
       )}
     </div>
