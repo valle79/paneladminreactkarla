@@ -6,7 +6,7 @@ import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtDate } from '../components/ui';
 import { Pagination } from '../components/Pagination';
 
-const emptyDni = { dni: '', names: '', last_names: '', address: '' };
+const emptyDni = { dni: '', names: '', last_names: '', address: '', phone: '' };
 const emptyRuc = {
   ruc: '', razonsocial: '', nombrecomercial: '', telefonos: '',
   direccion: '', departamento: '', provincia: '', distrito: '',
@@ -48,7 +48,7 @@ function DniTab() {
   const { q, setQ, filtered } = useSearch(rows, [(r) => r.names, (r) => r.last_names, (r) => r.dni]);
 
   const openAdd = () => { setEditingId(null); setForm(emptyDni); setSource(''); setModal(true); };
-  const openEdit = (r) => { setEditingId(r.id); setForm({ dni: r.dni, names: r.names, last_names: r.last_names, address: r.address }); setSource(''); setModal(true); };
+  const openEdit = (r) => { setEditingId(r.id); setForm({ dni: r.dni, names: r.names, last_names: r.last_names, address: r.address, phone: r.phone || '' }); setSource(''); setModal(true); };
 
   const consultarDni = async () => {
     const dni = form.dni.replace(/\D/g, '');
@@ -183,7 +183,11 @@ function DniTab() {
           <div className="field"><label>Nombres <span className="req">*</span></label><input className="input" value={form.names} onChange={(e) => setForm({ ...form, names: e.target.value })} /></div>
           <div className="field"><label>Apellidos <span className="req">*</span></label><input className="input" value={form.last_names} onChange={(e) => setForm({ ...form, last_names: e.target.value })} /></div>
         </div>
-        <div className="field"><label>Dirección</label><input className="input" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
+        <div className="grid-2">
+          <div className="field"><label>Dirección</label><input className="input" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
+          <div className="field"><label>Teléfono / WhatsApp</label><input className="input" maxLength={9} placeholder="Ej. 987654321" value={form.phone || ''} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} /></div>
+        </div>
+        <div className="hint">El teléfono permite enviar los documentos (boleta, factura, proforma) al cliente por WhatsApp.</div>
       </Modal>
       {ConfirmDialog}
     </>

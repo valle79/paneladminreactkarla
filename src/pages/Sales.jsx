@@ -9,6 +9,7 @@ import {
   StatusBadge, DocTypeBadge, InvoiceBadge,
 } from '../components/ui';
 import { Pagination } from '../components/Pagination';
+import { COMPANY, formatDocNumber } from '../config';
 
 const emptySale = {
   client_type: 'dni',
@@ -32,6 +33,49 @@ const ITEM_TYPES = [
   { value: 'service', label: 'Servicios' },
   { value: 'manual', label: 'Items manuales' },
 ];
+
+const DIGITS = (v) => String(v || '').replace(/\D/g, '');
+
+const clientPhone = (s) => {
+  const raw = s.client_type === 'ruc'
+    ? (Array.isArray(s.client?.telefonos) ? s.client.telefonos[0] : s.client?.telefonos)
+    : s.client?.phone;
+  const d = DIGITS(raw);
+  if (!d) return null;
+  if (d.length === 11 && d.startsWith('51')) return d;
+  const short = d.startsWith('0') ? d.slice(1) : d;
+  return short.length === 9 ? `51${short}` : null;
+};
+
+const buildWhatsAppMessage = (s, link) => {
+  const client = s.client || {};
+  const clientName =
+    (client.names ? `${client.names} ${client.last_names || ''}`.trim() : client.razonsocial) || 'cliente';
+  const advisorName = s.advisor?.name || COMPANY.seller.name;
+  const advisorPhone = s.advisor?.whatsapp ? `+51 ${DIGITS(s.advisor.whatsapp)}` : `+51 ${COMPANY.phones[0]}`;
+  return [
+    `*${COMPANY.shortName}*`,
+    `RUC ${COMPANY.ruc} · ${COMPANY.address}`,
+    '',
+    `Estimado(a) ${clientName}:`,
+    '',
+    `Le comparto su *${formatDocNumber(s.invoice_type, s.invoice_number)}* por el importe de *${fmtMoney(s.total)}*.`,
+    'Puede revisarla o descargarla desde el siguiente enlace:',
+    link,
+    '',
+    `Para el pago, puede depositar a nuestra cuenta en *${COMPANY.bank.name}*:`,
+    `*${COMPANY.bank.account}* (${COMPANY.bank.type})`,
+    '',
+    'Si realiza el depósito, sírvase enviarnos su constancia por este mismo canal para dejar su documento registrado como pagado.',
+    '',
+    'Quedamos atentos a cualquier consulta.',
+    '',
+    'Atentamente,',
+    `*${advisorName}*`,
+    `${COMPANY.seller.role}`,
+    `${advisorPhone} · ${COMPANY.shortName}`,
+  ].join('\n');
+};
 
 export default function Sales() {
   const toast = useToast();
@@ -400,6 +444,19 @@ export default function Sales() {
     } catch (e) { toast.error(errMsg(e)); }
   };
 
+  const sendWhatsApp = async (s) => {
+    const phone = clientPhone(s);
+    if (!phone) return toast.warning('El cliente no tiene teléfono/WhatsApp registrado');
+    try {
+      const r = await api.post(`/sales/${s.id}/share-token`);
+      const link = `${window.location.origin}/doc/${s.id}/${r.data.share_token}`;
+      const msg = buildWhatsAppMessage(s, link);
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
+
   if (!rows) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar las ventas" /> : <Loader text="Cargando ventas..." />;
 
   const clientList = form.client_type === 'dni' ? cats?.clients || [] : cats?.ruc || [];
@@ -469,6 +526,11 @@ export default function Sales() {
                     <div className="text-muted" style={{ fontSize: 12 }}>
                       {s.client ? (s.client.dni ? `DNI ${s.client.dni}` : s.client.ruc ? `RUC ${s.client.ruc}` : '') : '—'}
                     </div>
+                    {clientPhone(s) && (
+                      <div className="text-muted" style={{ fontSize: 12, color: 'var(--g-dark)' }}>
+                        {s.client?.phone || (Array.isArray(s.client?.telefonos) ? s.client.telefonos[0] : s.client?.telefonos)}
+                      </div>
+                    )}
                   </td>
                   <td className="text-muted">{s.advisor?.name || '—'}</td>
                   <td className="money"><b>{fmtMoney(s.total)}</b></td>
@@ -478,6 +540,9 @@ export default function Sales() {
                     <div className="row-actions">
                       <button className="btn-icon" onClick={() => setView(s)} title="Ver detalle"><Icon name="visible" size={14} /></button>
                       <button className="btn-icon" onClick={() => setPreview({ sale: s, payload: null })} title="Imprimir / PDF"><Icon name="print" size={14} /></button>
+                      {clientPhone(s) && (
+                        <button className="btn-icon wa" onClick={() => sendWhatsApp(s)} title="Enviar por WhatsApp"><Icon name="whatsapp" size={14} /></button>
+                      )}
                       {s.payment_status !== 'pagado' && (
                         <button className="btn-icon pay" onClick={() => markPaid(s)} title="Marcar como pagado"><Icon name="checkmark" size={14} /></button>
                       )}

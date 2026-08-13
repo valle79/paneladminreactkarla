@@ -7,7 +7,7 @@ import { errMsg } from '../api';
 const IMG = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=1600&auto=format&fit=crop';
 const IMG_FALLBACK = 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?q=80&w=1600&auto=format&fit=crop';
 
-const FEATURES = ['Cultivadoras', 'Brazo rígido', 'Repuestos', 'Asesoría técnica'];
+const FEATURES = ['Cultivadoras', 'Cosechadoras', 'Repuestos', 'Asesoría técnica'];
 
 export default function Login() {
   const { login } = useAuth();

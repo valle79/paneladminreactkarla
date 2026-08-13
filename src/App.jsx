@@ -11,6 +11,7 @@ import Services from './pages/Services';
 import Clients from './pages/Clients';
 import Promotions from './pages/Promotions';
 import Sales from './pages/Sales';
+import DocView from './pages/DocView';
 
 function Shell() {
   const { user } = useAuth();
@@ -44,6 +45,7 @@ export default function App() {
       <ToastProvider>
         <Routes>
           <Route path="/login" element={<Gate />} />
+          <Route path="/doc/:saleId/:token" element={<DocView />} />
           <Route path="/*" element={<Shell />} />
         </Routes>
       </ToastProvider>

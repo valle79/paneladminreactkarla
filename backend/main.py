@@ -647,13 +647,13 @@ def _serialize_sales(rows) -> list:
             advisors = {}
             if client_ids:
                 cur.execute(
-                    "SELECT id, names, last_names, dni, deleted FROM clients WHERE id = ANY(%s)",
+                    "SELECT id, names, last_names, dni, phone, deleted FROM clients WHERE id = ANY(%s)",
                     (client_ids,),
                 )
                 for c in cur.fetchall():
                     clients_dni[c["id"]] = dict(c)
                 cur.execute(
-                    "SELECT id, razonsocial, ruc, deleted FROM clients_ruc WHERE id = ANY(%s)",
+                    "SELECT id, razonsocial, ruc, telefonos, deleted FROM clients_ruc WHERE id = ANY(%s)",
                     (client_ids,),
                 )
                 for c in cur.fetchall():
@@ -678,6 +678,7 @@ def _serialize_sales(rows) -> list:
             else:
                 sale["client"] = None
             sale["advisor"] = advisors.get(sale["advisor_id"]) or None
+            sale.pop("share_token", None)
             out.append(sale)
         return out
     finally:
@@ -768,6 +769,30 @@ def get_sale(sale_id: int, _: dict = Depends(require_auth)):
     return _conn_or_400(run)
 
 
+@app.post("/api/sales/{sale_id}/share-token")
+def get_share_token(sale_id: int, _: dict = Depends(require_auth)):
+    def run():
+        row = db.fetch_one("SELECT share_token FROM sales WHERE id = %s AND NOT deleted", (sale_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Venta no encontrada")
+        token = row["share_token"]
+        if not token:
+            token = uuid.uuid4().hex
+            db.execute("UPDATE sales SET share_token = %s WHERE id = %s", (token, sale_id), returning=None)
+        return {"share_token": token}
+    return _conn_or_400(run)
+
+
+@app.get("/api/public-doc/{sale_id}/{token}")
+def public_doc(sale_id: int, token: str):
+    row = db.fetch_one("SELECT * FROM sales WHERE id = %s", (sale_id,))
+    if not row or row.get("deleted") or not row.get("share_token"):
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    if row["share_token"] != token:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    return _serialize_sale(dict(row))
+
+
 @app.post("/api/sales")
 def create_sale(payload: dict, _: dict = Depends(require_auth)):
     def run():
@@ -805,6 +830,7 @@ def create_sale(payload: dict, _: dict = Depends(require_auth)):
                     "total": payload.get("total", 0),
                     "invoice_type": payload.get("invoice_type"),
                     "invoice_number": invoice_number,
+                    "share_token": uuid.uuid4().hex,
                     "payment_status": payload.get("payment_status", "por_pagar"),
                     "payment_description": payload.get("payment_description"),
                     "payment_date": payload.get("payment_date"),

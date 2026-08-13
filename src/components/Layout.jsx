@@ -95,9 +95,7 @@ export default function Layout({ children }) {
           <span className="date-chip">
             <Icon name="calendar" size={14} /> {today}
           </span>
-          <span className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Icon name="leaf" size={12} /> El Iqueño SAC
-          </span>
+
         </header>
 
         <main className="content">{children}</main>

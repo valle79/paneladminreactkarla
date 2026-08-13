@@ -988,7 +988,33 @@ kbd.hint-key { background: #eef1ef; border: 1px solid var(--line); border-bottom
 .date-sep { color: var(--faint); font-size: 12px; font-weight: 600; }
 .btn-icon.pay { color: var(--g-dark); border-color: #bcdcc5; }
 .btn-icon.pay:hover { background: var(--g-soft); color: var(--g-primary); }
+.btn-icon.wa { color: #128c4a; border-color: rgba(37, 211, 102, 0.5); }
+.btn-icon.wa:hover { background: #e6f9ee; border-color: #25d366; color: #0c7a3f; }
 @media (max-width: 640px) { .date-range { flex-wrap: wrap; } .date-range .input { width: 100%; } }
+
+/* ---------- Vista pública de documento (WhatsApp) ---------- */
+.docview { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
+.docview-bar {
+  position: sticky; top: 0; z-index: 30; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; padding: 10px 18px;
+  background: var(--g-dark); color: #fff;
+}
+.docview-brand { display: flex; align-items: center; gap: 12px; }
+.docview-logo { width: 42px; height: 42px; border-radius: 8px; background: #fff; object-fit: cover; }
+.docview-name { font-weight: 800; font-size: 14px; letter-spacing: 0.4px; }
+.docview-sub { font-size: 12px; opacity: 0.75; }
+.docview-stage { flex: 1; display: flex; justify-content: center; padding: 28px 16px 40px; }
+.docview-stage .proforma-preview { margin: 0; }
+.docview-empty { text-align: center; color: var(--muted); margin-top: 70px; padding: 0 20px; }
+.docview-empty h2 { margin: 12px 0 6px; color: var(--g-dark); }
+.docview-empty p { margin: 4px 0; }
+.docview-contact { font-size: 13px; }
+.docview-foot { text-align: center; font-size: 12px; color: var(--muted); padding: 14px; border-top: 1px solid var(--line); background: #fff; }
+@media print {
+  .docview-bar, .docview-foot, .docview-empty { display: none !important; }
+  .docview-stage { padding: 0; }
+  .docview { background: #fff; }
+}
 
 /* ---------- Responsive / móviles ---------- */
 .modal-foot { flex-wrap: wrap; }
