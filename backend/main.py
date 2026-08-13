@@ -599,7 +599,7 @@ def _load_catalog_batch_cur(items: list[dict], cur) -> dict:
             continue
         cols = "name, description, specifications, features, image_url"
         if table == "services":
-            cols = "name, image_url"
+            cols = "name"
         cur.execute(
             f"SELECT id, {cols} FROM {table} WHERE id = ANY(%s) AND NOT deleted",
             (list(table_ids),),
