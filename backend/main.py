@@ -689,22 +689,51 @@ def _serialize_sale(row: dict) -> dict:
 
 
 @app.get("/api/sales")
-def list_sales(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+def list_sales(
+    include_deleted: bool = False,
+    page: int = 1,
+    limit: int = 50,
+    date_from: str = None,
+    date_to: str = None,
+    _: dict = Depends(require_auth),
+):
+    def valid_date(v: str) -> bool:
+        try:
+            from datetime import datetime as _dt
+            _dt.strptime(v, "%Y-%m-%d")
+            return True
+        except ValueError:
+            return False
+
     def run():
-        wh = "" if include_deleted else "WHERE NOT deleted"
-        
-        # Total count
-        total = get_total_count("sales", "" if include_deleted else "NOT deleted")
-        
+        conds = [] if include_deleted else ["NOT deleted"]
+        params: list = []
+        if date_from:
+            if not valid_date(date_from):
+                raise HTTPException(status_code=400, detail="date_from debe tener formato YYYY-MM-DD")
+            conds.append("created_at::date >= %s")
+            params.append(date_from)
+        if date_to:
+            if not valid_date(date_to):
+                raise HTTPException(status_code=400, detail="date_to debe tener formato YYYY-MM-DD")
+            conds.append("created_at::date <= %s")
+            params.append(date_to)
+
+        wh = f"WHERE {' AND '.join(conds)}" if conds else ""
+
+        # Total count (con filtros)
+        total = db.fetch_one(f"SELECT COUNT(*)::int AS total FROM sales {wh}", params or None)["total"]
+
         # Paginación
         page_num = max(1, page)
         page_limit = min(max(1, limit), 100)
         offset = (page_num - 1) * page_limit
-        
+
         rows = db.fetch_all(
-            f"SELECT * FROM sales {wh} ORDER BY created_at DESC, id DESC LIMIT {page_limit} OFFSET {offset}"
+            f"SELECT * FROM sales {wh} ORDER BY created_at DESC, id DESC LIMIT {page_limit} OFFSET {offset}",
+            params or None,
         )
-        
+
         return {
             "items": _serialize_sales(rows),
             "pagination": {
@@ -895,6 +924,37 @@ def update_sale(sale_id: int, payload: dict, _: dict = Depends(require_auth)):
             raise HTTPException(status_code=400, detail=f"Error al actualizar la venta: {e}")
         finally:
             db.close_conn(conn)
+    return _conn_or_400(run)
+
+
+@app.patch("/api/sales/{sale_id}/payment")
+def update_sale_payment(sale_id: int, payload: dict, _: dict = Depends(require_auth)):
+    def run():
+        existing = db.fetch_one("SELECT * FROM sales WHERE id = %s", (sale_id,))
+        if not existing or existing.get("deleted"):
+            raise HTTPException(status_code=404, detail="Venta no encontrada")
+
+        status = payload.get("payment_status")
+        if status not in ("pagado", "por_pagar", "a_cuenta"):
+            raise HTTPException(status_code=400, detail="Estado de pago inválido")
+        if status == existing["payment_status"]:
+            return _serialize_sale(existing)
+
+        if status == "pagado":
+            db.execute(
+                "UPDATE sales SET payment_status = 'pagado', amount_paid = %s, "
+                "amount_pending = 0, pending_payment_date = NULL WHERE id = %s",
+                (existing["total"], sale_id),
+                returning=None,
+            )
+        else:
+            db.execute(
+                "UPDATE sales SET payment_status = %s WHERE id = %s",
+                (status, sale_id),
+                returning=None,
+            )
+        updated = db.fetch_one("SELECT * FROM sales WHERE id = %s", (sale_id,))
+        return _serialize_sale(updated)
     return _conn_or_400(run)
 
 

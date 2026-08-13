@@ -50,13 +50,17 @@ export default function Sales() {
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [pagination, setPagination] = useState(null);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const load = () => {
     setFailed(false);
     const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+    if (dateFrom) params.set('date_from', dateFrom);
+    if (dateTo) params.set('date_to', dateTo);
     api.get(`/sales?${params}`).then((r) => { setRows(r.data.items); setPagination(r.data.pagination); }).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
-  useEffect(() => { load(); }, [page]);
+  useEffect(() => { load(); }, [page, dateFrom, dateTo]);
 
   const isProformaLike = form.invoice_type === 'proforma' || form.invoice_type === 'cotizacion';
 
@@ -380,6 +384,22 @@ export default function Sales() {
     } catch (e) { toast.error(errMsg(e)); }
   };
 
+  const markPaid = async (s) => {
+    const doc = `${s.invoice_type.toUpperCase()}-${String(s.invoice_number || '').padStart(7, '0')}`;
+    const ok = await ask({
+      title: 'Marcar como pagado',
+      message: `¿Confirmas que ${doc} ya fue pagada? El monto pendiente quedará en S/ 0.00.`,
+      confirmText: 'Sí, marcar pagada',
+      confirmVariant: 'primary',
+    });
+    if (!ok) return;
+    try {
+      await api.patch(`/sales/${s.id}/payment`, { payment_status: 'pagado' });
+      toast.success(`${doc} marcada como pagada`);
+      load();
+    } catch (e) { toast.error(errMsg(e)); }
+  };
+
   if (!rows) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar las ventas" /> : <Loader text="Cargando ventas..." />;
 
   const clientList = form.client_type === 'dni' ? cats?.clients || [] : cats?.ruc || [];
@@ -396,6 +416,32 @@ export default function Sales() {
 
       <div className="card">
         <Toolbar search={q} onSearch={setQ} placeholder="Buscar por documento, cliente o monto...">
+          <div className="date-range">
+            <input
+              type="date"
+              className="input"
+              value={dateFrom}
+              max={dateTo || ''}
+              aria-label="Desde"
+              title="Desde"
+              onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+            />
+            <span className="date-sep">hasta</span>
+            <input
+              type="date"
+              className="input"
+              value={dateTo}
+              min={dateFrom || ''}
+              aria-label="Hasta"
+              title="Hasta"
+              onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+            />
+            {(dateFrom || dateTo) && (
+              <button type="button" className="btn-icon" title="Limpiar fechas" onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}>
+                <Icon name="x" size={14} />
+              </button>
+            )}
+          </div>
           <span className="pill-count">{filtered.length} ventas</span>
         </Toolbar>
         <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--line)', borderRadius: 0 }}>
@@ -432,6 +478,9 @@ export default function Sales() {
                     <div className="row-actions">
                       <button className="btn-icon" onClick={() => setView(s)} title="Ver detalle"><Icon name="visible" size={14} /></button>
                       <button className="btn-icon" onClick={() => setPreview({ sale: s, payload: null })} title="Imprimir / PDF"><Icon name="print" size={14} /></button>
+                      {s.payment_status !== 'pagado' && (
+                        <button className="btn-icon pay" onClick={() => markPaid(s)} title="Marcar como pagado"><Icon name="checkmark" size={14} /></button>
+                      )}
                       <button className="btn-icon" onClick={() => openEdit(s)} title="Editar"><Icon name="edit" size={14} /></button>
                       <button className="btn-icon danger" onClick={() => remove(s)} title="Anular"><Icon name="trash" size={14} /></button>
                     </div>

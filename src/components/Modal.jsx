@@ -34,7 +34,7 @@ export function Modal({ open, onClose, title, icon, children, footer, size = '' 
   );
 }
 
-export function ConfirmModal({ open, onClose, onConfirm, title, message, confirmText = 'Eliminar', loading }) {
+export function ConfirmModal({ open, onClose, onConfirm, title, message, confirmText = 'Eliminar', confirmVariant = 'danger', loading }) {
   return (
     <Modal
       open={open}
@@ -45,7 +45,7 @@ export function ConfirmModal({ open, onClose, onConfirm, title, message, confirm
       footer={
         <>
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-danger" onClick={onConfirm} disabled={loading}>
+          <button className={`btn btn-${confirmVariant}`} onClick={onConfirm} disabled={loading}>
             {loading ? <span className="spinner" /> : <Icon name="checkmark" size={15} />} {confirmText}
           </button>
         </>
@@ -57,7 +57,7 @@ export function ConfirmModal({ open, onClose, onConfirm, title, message, confirm
 }
 
 export function useConfirm() {
-  const [state, setState] = useState({ open: false, title: '', message: '', onYes: null, confirmText: 'Eliminar', loading: false });
+  const [state, setState] = useState({ open: false, title: '', message: '', onYes: null, confirmText: 'Eliminar', confirmVariant: 'danger', loading: false });
 
   const ask = (opts) =>
     new Promise((resolve) => {
@@ -73,6 +73,7 @@ export function useConfirm() {
       title={state.title || 'Confirmar acción'}
       message={state.message}
       confirmText={state.confirmText}
+      confirmVariant={state.confirmVariant}
       onConfirm={async () => {
         setState((s) => ({ ...s, loading: true }));
         try {
