@@ -4,69 +4,112 @@ import { useAuth } from '../auth';
 import { useToast } from '../components/Toast';
 import { errMsg } from '../api';
 
+const IMG = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=1600&auto=format&fit=crop';
+const IMG_FALLBACK = 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?q=80&w=1600&auto=format&fit=crop';
+
+const FEATURES = ['Cultivadoras', 'Brazo rígido', 'Repuestos', 'Asesoría técnica'];
+
 export default function Login() {
   const { login } = useAuth();
   const toast = useToast();
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!password.trim()) return toast.warning('Ingresa la contraseña del panel');
+    if (!password.trim()) return setError('Ingresa la contraseña del panel');
+    setError('');
     setBusy(true);
     try {
       await login(password);
       toast.success('Bienvenido al panel administrativo');
     } catch (err) {
-      toast.error(errMsg(err));
+      setError(errMsg(err));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="login-bg">
-      <form className="login-card" onSubmit={submit}>
-        <div className="login-logo">
-          <Icon name="tractor" size={36} />
-        </div>
-        <h1>Panel Administrativo</h1>
-        <div className="tagline">Fabricaciones & Servicios <b style={{ color: 'var(--g-dark)' }}>El Iqueño SAC</b></div>
-
-        <div className="field">
-          <label><Icon name="lock" size={14} /> Contraseña de acceso</label>
-          <div style={{ position: 'relative' }}>
-            <input
-              className="input"
-              type={show ? 'text' : 'password'}
-              placeholder="Ingresa la contraseña"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-              style={{ paddingRight: 42 }}
-            />
-            <button
-              type="button"
-              className="btn-icon"
-              style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent' }}
-              onClick={() => setShow(!show)}
-            >
-              {show ? <Icon name="hide" size={16} /> : <Icon name="visible" size={16} />}
-            </button>
+    <div className="login-split">
+      {/* Mitad izquierda: imagen */}
+      <div className="login-media">
+        <img src={IMG} onError={(e) => { e.target.src = IMG_FALLBACK; }} alt="Campo agrícola" />
+        <div className="login-media-veil" />
+        <div className="login-media-content">
+          <span className="login-media-bar" />
+          <h2>
+            Fabricaciones & Servicios
+            <br />
+            <b>El Iqueño S.A.C.</b>
+          </h2>
+          <p>Maquinaria agrícola, cultivadoras, repuestos y atención personalizada para el campo peruano.</p>
+          <div className="login-media-chips">
+            {FEATURES.map((f) => <span key={f}>{f}</span>)}
           </div>
         </div>
+      </div>
 
-        <button className="btn btn-primary btn-lg w-full" type="submit" disabled={busy} style={{ justifyContent: 'center', marginTop: 6 }}>
-          {busy ? <span className="spinner" /> : <Icon name="security-checked" size={18} />}
-          Ingresar al panel
-          {!busy && <Icon name="arrow" size={17} />}
-        </button>
+      {/* Mitad derecha: formulario */}
+      <div className="login-form-side">
+        <div className="login-form-wrap">
+          <div className="login-brand">
+            <div className="login-brand-ico"><Icon name="tractor" size={30} /></div>
+            <div>
+              <h1>EL IQUEÑO SAC</h1>
+              <p>Panel de gestión</p>
+            </div>
+          </div>
 
-        <div className="login-foot">
-          © {new Date().getFullYear()} Fabricaciones & Servicios El Iqueño SAC · Todos los derechos reservados
+          <h2 className="login-title">Bienvenido de nuevo</h2>
+          <p className="login-sub">Ingresa la contraseña para acceder al sistema.</p>
+
+          {error && (
+            <div className="login-error" role="alert">
+              <Icon name="high-priority" size={16} /> {error}
+            </div>
+          )}
+
+          <form onSubmit={submit}>
+            <div className="field">
+              <label><Icon name="lock" size={13} /> Contraseña de acceso</label>
+              <div className="input-icon">
+                <Icon name="lock" size={16} />
+                <input
+                  className="input"
+                  type={show ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoFocus
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="input-action"
+                  onClick={() => setShow(!show)}
+                  title={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {show ? <Icon name="hide" size={16} /> : <Icon name="visible" size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button className="btn btn-primary btn-lg w-full" type="submit" disabled={busy} style={{ justifyContent: 'center' }}>
+              {busy ? <span className="spinner" /> : <Icon name="security-checked" size={17} />}
+              Ingresar al panel
+              {!busy && <Icon name="arrow" size={16} />}
+            </button>
+          </form>
+
+          <div className="login-foot">
+            © {new Date().getFullYear()} Fabricaciones & Servicios El Iqueño SAC · Todos los derechos reservados
+          </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
