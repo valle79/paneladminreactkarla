@@ -82,16 +82,17 @@ Documentación interactiva: http://localhost:8000/docs
 
 ## Despliegue
 
-### Backend (Koyeb)
-1. Crea la app en app.koyeb.com → **Create App** → conécta el repo GitHub `valle79/paneladminreactkarla` (rama `develop`).
-2. En **Builder**: expande la sección y en **Work directory** pon `backend` (el `Dockerfile` está en `backend/Dockerfile`).
-3. En **Exposed ports**: `8000`.
-4. En **Environment variables** agrega: `DATABASE_URL`, `AUTH_PASSWORD`, `AUTH_SECRET`, `DECOLECTA_TOKEN`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (PORT lo asigna Koyeb automáticamente al puerto expuesto).
-5. Healthcheck: `/api/health` (configurable en **Health Checks**).
-6. Para migrar archivos locales a Cloudinary: `python backend/migrate_uploads.py`.
+### Backend (Render)
+1. Crea la cuenta en render.com → **New → Web Service** → conécta el repo GitHub `valle79/paneladminreactkarla` (rama `develop`).
+2. En **Root Directory** pon `backend` (el `Dockerfile` está en `backend/Dockerfile`; Render lo detecta solo).
+3. Échale un nombre (ej. `iqueno-backend`), región e **Instance Type**: Free (o Starter si quieres que nunca duerma).
+4. En **Environment** agrega: `DATABASE_URL`, `AUTH_PASSWORD`, `AUTH_SECRET`, `DECOLECTA_TOKEN`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (PORT lo asigna Render automáticamente).
+5. **Health Check Path**: `/api/health`.
+6. **Create Web Service**. Render re-despliega automáticamente con cada push a `develop`.
+7. Para migrar archivos locales a Cloudinary: `python backend/migrate_uploads.py`.
 
 ### Frontend (Netlify)
-Configura la variable `VITE_API_URL` con la URL de la API de Koyeb y haz build desde la raíz del proyecto.
+Configura la variable `VITE_API_URL` con la URL de la API de Render y haz build desde la raíz del proyecto.
 
 ## Notas
 
