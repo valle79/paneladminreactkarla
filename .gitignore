@@ -13,7 +13,9 @@ venv/
 # Entorno / secretos
 .env
 .env.local
-.env.production
+
+# VITE_API_URL es pública (viaja en el bundle del cliente); se versiona como respaldo
+!.env.production
 
 # Archivos subidos localmente (se almacenan en Cloudinary en producción)
 backend/uploads/*
