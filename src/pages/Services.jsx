@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, BadgeDollarSign, Save, X } from 'lucide-react';
+import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
@@ -70,7 +70,7 @@ export default function Services() {
           <h1>Servicios</h1>
           <div className="sub">Servicios técnicos ofrecidos por la empresa</div>
         </div>
-        <button className="btn btn-primary btn-lg" onClick={openAdd}><Plus size={17} /> Agregar Servicio</button>
+        <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Servicio</button>
       </div>
 
       <div className="card">
@@ -92,7 +92,7 @@ export default function Services() {
                 <tr key={r.id}>
                   <td>
                     <div className="flex">
-                      <span className="thumb-wrap" style={{ width: 38, height: 38 }}><BadgeDollarSign size={17} /></span>
+                      <span className="thumb-wrap" style={{ width: 38, height: 38 }}><Icon name="money-bag" size={17} /></span>
                       <span className="cell-title">{r.name}</span>
                     </div>
                   </td>
@@ -100,8 +100,8 @@ export default function Services() {
                   <td className="text-muted">{r.id}</td>
                   <td>
                     <div className="row-actions">
-                      <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Pencil size={14} /></button>
-                      <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Trash2 size={14} /></button>
+<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
+            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -125,13 +125,13 @@ export default function Services() {
         open={modal}
         onClose={() => setModal(false)}
         title={editingId ? 'Editar servicio' : 'Nuevo servicio'}
-        icon={<BadgeDollarSign size={18} />}
+        icon={<Icon name="money-bag" size={18} />}
         size="sm"
         footer={
           <>
-            <button className="btn btn-ghost" onClick={() => setModal(false)}><X size={15} /> Cancelar</button>
+            <button className="btn btn-ghost" onClick={() => setModal(false)}><Icon name="x" size={15} /> Cancelar</button>
             <button className="btn btn-primary" onClick={save} disabled={busy}>
-              {busy ? <span className="spinner" /> : <Save size={15} />} Guardar
+              {busy ? <span className="spinner" /> : <Icon name="save" size={15} />} Guardar
             </button>
           </>
         }

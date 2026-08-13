@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  Users, Tractor, Wrench, UserRound, ShoppingCart, Tags, TrendingUp,
-  DollarSign, CalendarRange, ChevronRight, Factory,
-} from 'lucide-react';
+import Icon from '../components/Icon';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts';
@@ -28,12 +25,12 @@ export default function Dashboard() {
   if (!data) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar los indicadores" /> : <Loader text="Cargando indicadores..." />;
 
   const cards = [
-    { icon: Users, label: 'Asesores', num: data.counts.advisors, cls: 'green' },
-    { icon: Tractor, label: 'Productos', num: data.counts.products, cls: 'yellow' },
-    { icon: Wrench, label: 'Repuestos', num: data.counts.spare_parts, cls: 'blue' },
-    { icon: UserRound, label: 'Clientes', num: data.counts.clients + data.counts.clients_ruc, cls: 'green' },
-    { icon: ShoppingCart, label: 'Ventas', num: data.counts.sales, cls: 'red' },
-    { icon: Tags, label: 'Promociones', num: data.counts.promotions, cls: 'yellow' },
+    { icon: 'conference', label: 'Asesores', num: data.counts.advisors, cls: 'green' },
+    { icon: 'tractor', label: 'Productos', num: data.counts.products, cls: 'yellow' },
+    { icon: 'wrench', label: 'Repuestos', num: data.counts.spare_parts, cls: 'blue' },
+    { icon: 'user-male-circle', label: 'Clientes', num: data.counts.clients + data.counts.clients_ruc, cls: 'green' },
+    { icon: 'shopping-cart', label: 'Ventas', num: data.counts.sales, cls: 'red' },
+    { icon: 'price-tag', label: 'Promociones', num: data.counts.promotions, cls: 'yellow' },
   ];
 
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -52,14 +49,14 @@ export default function Dashboard() {
           <div className="sub">Resumen general del sistema · Fabricaciones & Servicios El Iqueño SAC</div>
         </div>
         <span className="chip" style={{ fontSize: 12.5, padding: '7px 14px' }}>
-          <Factory size={14} /> Sistema de control integral
+          <Icon name="factory" size={14} /> Sistema de control integral
         </span>
       </div>
 
       <div className="stat-grid">
         {cards.map((c) => (
           <div className="stat-card" key={c.label}>
-            <div className={`ico ${c.cls}`}><c.icon size={20} /></div>
+            <div className={`ico ${c.cls}`}><Icon name={c.icon} size={20} /></div>
             <div className="num">{c.num}</div>
             <div className="lbl">{c.label} registrados</div>
           </div>
@@ -68,7 +65,7 @@ export default function Dashboard() {
 
       <div className="dash-grid">
         <div className="dash-card">
-          <h3><TrendingUp size={17} color="var(--g-dark)" /> Ventas de los últimos meses</h3>
+          <h3><Icon name="bar-chart" size={17} style={{ color: 'var(--g-dark)' }} /> Ventas de los últimos meses</h3>
           <div style={{ width: '100%', height: 260 }}>
             <ResponsiveContainer>
               <AreaChart data={chart} margin={{ top: 6, right: 6, left: -8, bottom: 0 }}>
@@ -89,7 +86,7 @@ export default function Dashboard() {
         </div>
 
         <div className="dash-card">
-          <h3><DollarSign size={17} color="var(--y-dark)" /> Totales generales</h3>
+          <h3><Icon name="money" size={17} style={{ color: 'var(--y-dark)' }} /> Totales generales</h3>
           <div className="sale-summary">
             <div className="line"><span className="text-muted">Ventas cobradas</span><b>{data.counts.sales}</b></div>
             <div className="line"><span className="text-muted">Subtotal</span><span className="money">{fmtMoney(data.totals?.subtotal)}</span></div>
@@ -97,13 +94,13 @@ export default function Dashboard() {
             <div className="line total"><span>Total cobrado</span><span className="money">{fmtMoney(data.totals?.total)}</span></div>
           </div>
           <div style={{ marginTop: 16, fontSize: 12.5, color: 'var(--muted)', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <CalendarRange size={15} /> Monto acumulado de ventas con pago pagado/a cuenta.
+            <Icon name="calendar--v1" size={15} /> Monto acumulado de ventas con pago pagado/a cuenta.
           </div>
         </div>
       </div>
 
       <div className="dash-card mt-20">
-        <h3><ShoppingCart size={17} color="var(--g-dark)" /> Últimas ventas</h3>
+        <h3><Icon name="shopping-cart" size={17} style={{ color: 'var(--g-dark)' }} /> Últimas ventas</h3>
         <div className="table-wrap" style={{ border: 'none', boxShadow: 'none' }}>
           <table className="data">
             <thead>

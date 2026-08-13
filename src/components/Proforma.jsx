@@ -1,5 +1,5 @@
 import { forwardRef, useRef, useState, useEffect } from 'react';
-import { Printer, Eye, CheckCircle2, X } from 'lucide-react';
+import Icon from './Icon';
 import { useReactToPrint } from 'react-to-print';
 import { Modal } from './Modal';
 import { COMPANY, PROFORMA_DEFAULTS, formatDocNumber, formatMoneyPLN } from '../config';
@@ -260,6 +260,7 @@ export default function ProformaModal({ open, onClose, sale, onConfirm, confirmT
   const [busy, setBusy] = useState(false);
   const [documentTime, setDocumentTime] = useState(() => new Date());
   const isProformaLike = sale?.invoice_type === 'proforma' || sale?.invoice_type === 'cotizacion';
+  const docLabel = ({ boleta: 'Boleta', factura: 'Factura', proforma: 'Proforma', cotizacion: 'Cotizacion' })[sale?.invoice_type] || 'Documento';
 
   useEffect(() => {
     if (open) {
@@ -270,7 +271,7 @@ export default function ProformaModal({ open, onClose, sale, onConfirm, confirmT
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: `Proforma-${sale?.invoice_number || 'preview'}`,
+    documentTitle: `${docLabel}-${sale?.invoice_number || 'preview'}`,
     pageStyle: '@page { size: A4 portrait; margin: 10mm; }',
     onBeforeGetContent: () => new Promise((resolve) => {
       setDocumentTime(new Date());
@@ -285,15 +286,15 @@ export default function ProformaModal({ open, onClose, sale, onConfirm, confirmT
       open={open}
       onClose={onClose}
       title={isProformaLike ? 'Vista previa de proforma' : 'Vista previa de documento'}
-      icon={<Eye size={18} />}
+      icon={<Icon name="visible" size={18} />}
       size="xl"
       footer={
         <>
-          <button className="btn btn-ghost" onClick={onClose}><X size={15} /> Cerrar</button>
-          <button className="btn btn-yellow" onClick={handlePrint}><Printer size={15} /> Imprimir / PDF</button>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="x" size={15} /> Cerrar</button>
+          <button className="btn btn-yellow" onClick={handlePrint}><Icon name="print" size={15} /> Imprimir / PDF</button>
           {onConfirm && (
             <button className="btn btn-primary" disabled={busy} onClick={async () => { setBusy(true); await onConfirm(); setBusy(false); }}>
-              {busy ? <span className="spinner" /> : <CheckCircle2 size={16} />} {confirmText}
+              {busy ? <span className="spinner" /> : <Icon name="checkmark--v1" size={16} />} {confirmText}
             </button>
           )}
         </>

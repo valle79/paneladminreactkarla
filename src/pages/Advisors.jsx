@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, UserRound, Phone, Briefcase, Save, X } from 'lucide-react';
+import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
@@ -98,7 +98,7 @@ export default function Advisors() {
           <h1>Asesores</h1>
           <div className="sub">Personal de asesoría técnica y comercial</div>
         </div>
-        <button className="btn btn-primary btn-lg" onClick={openAdd}><Plus size={17} /> Agregar Asesor</button>
+        <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Asesor</button>
       </div>
 
       <div className="card">
@@ -129,7 +129,7 @@ export default function Advisors() {
                   <td><span className="chip">{r.position || '—'}</span></td>
                   <td>
                     <span className="flex" style={{ color: '#1eaa47', fontWeight: 600, fontSize: 13 }}>
-                      <Phone size={13} /> {r.whatsapp || '—'}
+                      <Icon name="phone" size={13} /> {r.whatsapp || '—'}
                     </span>
                   </td>
                   <td style={{ maxWidth: 260 }}>
@@ -138,8 +138,8 @@ export default function Advisors() {
                   <td className="text-muted">{fmtDate(r.created_at)}</td>
                   <td>
                     <div className="row-actions">
-                      <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Pencil size={14} /></button>
-                      <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Trash2 size={14} /></button>
+<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
+            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -163,13 +163,13 @@ export default function Advisors() {
         open={modal}
         onClose={() => setModal(false)}
         title={editingId ? 'Editar asesor' : 'Nuevo asesor'}
-        icon={<UserRound size={18} />}
+        icon={<Icon name="user-male-circle" size={18} />}
         size="lg"
         footer={
           <>
-            <button className="btn btn-ghost" onClick={() => setModal(false)}><X size={15} /> Cancelar</button>
+            <button className="btn btn-ghost" onClick={() => setModal(false)}><Icon name="x" size={15} /> Cancelar</button>
             <button className="btn btn-primary" onClick={save} disabled={busy}>
-              {busy ? <span className="spinner" /> : <Save size={15} />} Guardar asesor
+              {busy ? <span className="spinner" /> : <Icon name="save" size={15} />} Guardar asesor
             </button>
           </>
         }
@@ -185,11 +185,11 @@ export default function Advisors() {
           </div>
         </div>
         <div className="field">
-          <label><Phone size={14} /> WhatsApp <span className="req">*</span></label>
+          <label><Icon name="phone" size={14} /> WhatsApp <span className="req">*</span></label>
           <input className="input" placeholder="Ej. 987654321" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
         </div>
         <div className="field">
-          <label><Briefcase size={14} /> Especialidades</label>
+          <label><Icon name="briefcase" size={14} /> Especialidades</label>
           <div className="flex" style={{ flexWrap: 'wrap', gap: 8 }}>
             {SPECIALTIES.map((s) => (
               <label className="check" key={s}>

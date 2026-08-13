@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Tractor, Save, X, ListPlus, Ruler, CheckCircle2, FileText } from 'lucide-react';
+import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
@@ -119,7 +119,7 @@ export default function Products() {
           <h1>Productos</h1>
           <div className="sub">Maquinarias y productos fabricados · Galería</div>
         </div>
-        <button className="btn btn-primary btn-lg" onClick={openAdd}><Plus size={17} /> Agregar Producto</button>
+        <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Producto</button>
       </div>
 
       <div className="card">
@@ -158,8 +158,8 @@ export default function Products() {
                     <td className="text-muted">{fmtDate(r.created_at)}</td>
                     <td>
                       <div className="row-actions">
-                        <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Pencil size={14} /></button>
-                        <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Trash2 size={14} /></button>
+<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
+            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -184,13 +184,13 @@ export default function Products() {
         open={modal}
         onClose={() => setModal(false)}
         title={editingId ? 'Editar producto' : 'Nuevo producto'}
-        icon={<Tractor size={18} />}
+        icon={<Icon name="tractor" size={18} />}
         size="lg"
         footer={
           <>
-            <button className="btn btn-ghost" onClick={() => setModal(false)}><X size={15} /> Cancelar</button>
+            <button className="btn btn-ghost" onClick={() => setModal(false)}><Icon name="x" size={15} /> Cancelar</button>
             <button className="btn btn-primary" onClick={save} disabled={busy}>
-              {busy ? <span className="spinner" /> : <Save size={15} />} Guardar producto
+              {busy ? <span className="spinner" /> : <Icon name="save" size={15} />} Guardar producto
             </button>
           </>
         }
@@ -211,32 +211,32 @@ export default function Products() {
         </div>
 
         <div className="field">
-          <label><ListPlus size={14} /> Especificaciones técnicas</label>
+          <label><Icon name="add-list" size={14} /> Especificaciones técnicas</label>
           {specs.map((s, i) => (
             <div className="grid-2" style={{ marginBottom: 8 }} key={i}>
               <input className="input" placeholder="Ej. Potencia" maxLength={50} value={s.label} onChange={(e) => setSpec(i, 'label', e.target.value)} />
               <div className="flex">
                 <input className="input" placeholder="Ej. 100 HP" maxLength={100} value={s.value} onChange={(e) => setSpec(i, 'value', e.target.value)} />
-                <button className="btn-icon danger" onClick={() => setForm((f) => ({ ...f, specifications: f.specifications.filter((_, j) => j !== i) }))}><Trash2 size={14} /></button>
+                <button className="btn-icon danger" onClick={() => setForm((f) => ({ ...f, specifications: f.specifications.filter((_, j) => j !== i) }))}><Icon name="trash" size={14} /></button>
               </div>
             </div>
           ))}
-          <button className="btn btn-outline btn-sm" onClick={addSpec}><ListPlus size={14} /> Añadir especificación</button>
+          <button className="btn btn-outline btn-sm" onClick={addSpec}><Icon name="add-list" size={14} /> Añadir especificación</button>
         </div>
 
         <div className="field">
-          <label><CheckCircle2 size={14} /> Características destacadas</label>
+          <label><Icon name="checkmark--v1" size={14} /> Características destacadas</label>
           {form.features.map((f, i) => (
             <div className="flex" style={{ marginBottom: 8 }} key={i}>
               <input className="input" placeholder="Ej. Alta durabilidad" maxLength={200} value={f} onChange={(e) => setFeature(i, e.target.value)} />
-              <button className="btn-icon danger" onClick={() => setForm((s) => ({ ...s, features: s.features.filter((_, j) => j !== i) }))}><Trash2 size={14} /></button>
+              <button className="btn-icon danger" onClick={() => setForm((s) => ({ ...s, features: s.features.filter((_, j) => j !== i) }))}><Icon name="trash" size={14} /></button>
             </div>
           ))}
-          <button className="btn btn-outline btn-sm" onClick={addFeature}><Plus size={14} /> Añadir característica</button>
+          <button className="btn btn-outline btn-sm" onClick={addFeature}><Icon name="plus" size={14} /> Añadir característica</button>
         </div>
 
         <div className="field">
-          <label><Ruler size={14} /> Dimensiones y peso</label>
+          <label><Icon name="ruler" size={14} /> Dimensiones y peso</label>
           <div className="grid-3">
             <div><input className="input" type="number" min="0" step="0.1" placeholder="Ancho (cm)" value={dim.width} onChange={(e) => setForm((f) => ({ ...f, dimensions: { ...f.dimensions, width: e.target.value } }))} /></div>
             <div><input className="input" type="number" min="0" step="0.1" placeholder="Alto (cm)" value={dim.height} onChange={(e) => setForm((f) => ({ ...f, dimensions: { ...f.dimensions, height: e.target.value } }))} /></div>
@@ -247,7 +247,7 @@ export default function Products() {
 
         <div className="grid-2">
           <div className="field">
-            <label><FileText size={14} /> Ficha técnica (PDF)</label>
+            <label><Icon name="document" size={14} /> Ficha técnica (PDF)</label>
             <FileUpload value={form.pdf_url} onChange={(u) => setForm({ ...form, pdf_url: u })} isImage={false} accept="application/pdf" label="Arrastra un PDF o haz clic para seleccionarlo (máx. 10MB)" />
           </div>
           <div className="field">

@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Plus, Pencil, Trash2, ShoppingCart, Save, X, FilePlus2, Eye, User,
-  UserRound, CircleDollarSign, Printer, SlidersHorizontal,
-} from 'lucide-react';
+import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
@@ -394,7 +391,7 @@ export default function Sales() {
           <h1>Ventas</h1>
           <div className="sub">Boletas, facturas, proformas y cotizaciones</div>
         </div>
-        <button className="btn btn-primary btn-lg" onClick={openAdd}><Plus size={17} /> Nueva Venta</button>
+        <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Nueva Venta</button>
       </div>
 
       <div className="card">
@@ -433,12 +430,10 @@ export default function Sales() {
                   <td className="text-muted">{fmtDateTime(s.created_at)}</td>
                   <td>
                     <div className="row-actions">
-                      <button className="btn-icon" onClick={() => setView(s)} title="Ver detalle"><Eye size={14} /></button>
-                      {(s.invoice_type === 'proforma' || s.invoice_type === 'cotizacion') && (
-                        <button className="btn-icon" onClick={() => setPreview({ sale: s, payload: null })} title="Imprimir / PDF"><Printer size={14} /></button>
-                      )}
-                      <button className="btn-icon" onClick={() => openEdit(s)} title="Editar"><Pencil size={14} /></button>
-                      <button className="btn-icon danger" onClick={() => remove(s)} title="Anular"><Trash2 size={14} /></button>
+                      <button className="btn-icon" onClick={() => setView(s)} title="Ver detalle"><Icon name="visible" size={14} /></button>
+                      <button className="btn-icon" onClick={() => setPreview({ sale: s, payload: null })} title="Imprimir / PDF"><Icon name="print" size={14} /></button>
+                      <button className="btn-icon" onClick={() => openEdit(s)} title="Editar"><Icon name="edit" size={14} /></button>
+                      <button className="btn-icon danger" onClick={() => remove(s)} title="Anular"><Icon name="trash" size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -463,33 +458,30 @@ export default function Sales() {
         open={modal}
         onClose={() => setModal(false)}
         title={editingId ? 'Editar venta' : 'Nueva venta'}
-        icon={<ShoppingCart size={18} />}
+        icon={<Icon name="shopping-cart" size={18} />}
         size="lg"
         footer={
           <>
-            <button className="btn btn-ghost" onClick={() => setModal(false)}><X size={15} /> Cancelar</button>
-            {isProformaLike ? (
-              <button className="btn btn-yellow" onClick={openPreview} disabled={busy} style={{ justifyContent: 'center', minWidth: 190 }}>
-                <Eye size={16} /> Vista previa <b className="money" style={{ marginLeft: 4 }}>({fmtMoney(total)})</b>
-              </button>
-            ) : (
-              <button className="btn btn-primary" onClick={save} disabled={busy} style={{ justifyContent: 'center', minWidth: 190 }}>
-                {busy ? <span className="spinner" /> : <Save size={15} />} Guardar venta {!busy && <b className="money" style={{ marginLeft: 4 }}>({fmtMoney(total)})</b>}
-              </button>
-            )}
+            <button className="btn btn-ghost" onClick={() => setModal(false)}><Icon name="x" size={15} /> Cancelar</button>
+            <button className="btn btn-yellow" onClick={openPreview} disabled={busy} style={{ justifyContent: 'center', minWidth: 190 }}>
+              <Icon name="visible" size={16} /> Vista previa <b className="money" style={{ marginLeft: 4 }}>({fmtMoney(total)})</b>
+            </button>
+            <button className="btn btn-primary" onClick={save} disabled={busy} style={{ justifyContent: 'center', minWidth: 190 }}>
+              {busy ? <span className="spinner" /> : <Icon name="save" size={15} />} Guardar venta {!busy && <b className="money" style={{ marginLeft: 4 }}>({fmtMoney(total)})</b>}
+            </button>
           </>
         }
       >
         <div className="grid-3">
           <div className="field">
-            <label><User size={14} /> Tipo de cliente</label>
+            <label><Icon name="user-male" size={14} /> Tipo de cliente</label>
             <select className="select" value={form.client_type} onChange={(e) => setForm({ ...form, client_type: e.target.value, client_id: '' })}>
               <option value="dni">Persona (DNI)</option>
               <option value="ruc">Empresa (RUC)</option>
             </select>
           </div>
           <div className="field" style={{ gridColumn: 'span 2' }}>
-            <label><UserRound size={14} /> Cliente <span className="req">*</span></label>
+            <label><Icon name="user-male-circle" size={14} /> Cliente <span className="req">*</span></label>
             <select className="select" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
               <option value="">— Seleccionar cliente —</option>
               {clientList.map((c) => (
@@ -505,14 +497,14 @@ export default function Sales() {
 
         <div className="grid-3">
           <div className="field">
-            <label><User size={14} /> Asesor</label>
+            <label><Icon name="user-male" size={14} /> Asesor</label>
             <select className="select" value={form.advisor_id} onChange={(e) => setForm({ ...form, advisor_id: e.target.value })}>
               <option value="">— Sin asesor —</option>
               {(cats?.advisors || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div className="field">
-            <label><FilePlus2 size={14} /> Tipo de documento</label>
+            <label><Icon name="add-file" size={14} /> Tipo de documento</label>
             <select className="select" value={form.invoice_type} onChange={(e) => setForm({ ...form, invoice_type: e.target.value })}>
               <option value="boleta">Boleta</option>
               <option value="factura">Factura</option>
@@ -572,8 +564,8 @@ export default function Sales() {
                   <input className="input" type="number" min="0" step="0.01" value={it.unit_price} onChange={(e) => setItemField(idx, 'unit_price', e.target.value)} />
                   <b className="money" style={{ fontSize: 13 }}>{fmtMoney(Number(it.quantity || 0) * Number(it.unit_price || 0))}</b>
                   <div className="flex" style={{ gap: 4 }}>
-                    <button className={`btn-icon ${it.overrides ? 'active' : ''}`} title="Editar características" onClick={() => openSpecs(idx)}><SlidersHorizontal size={14} /></button>
-                    <button className="btn-icon danger" onClick={() => removeItem(idx)}><Trash2 size={14} /></button>
+                    <button className={`btn-icon ${it.overrides ? 'active' : ''}`} title="Editar características" onClick={() => openSpecs(idx)}><Icon name="settings" size={14} /></button>
+                    <button className="btn-icon danger" onClick={() => removeItem(idx)}><Icon name="trash" size={14} /></button>
                   </div>
                 </div>
               );
@@ -582,7 +574,7 @@ export default function Sales() {
           <div className="flex" style={{ gap: 8, flexWrap: 'wrap' }}>
             {ITEM_TYPES.map((t) => (
               <button key={t.value} className="btn btn-outline btn-sm" onClick={() => addItem(t.value)}>
-                <Plus size={13} /> {t.label}
+                <Icon name="plus" size={13} /> {t.label}
               </button>
             ))}
           </div>
@@ -603,7 +595,7 @@ export default function Sales() {
         open={!!view}
         onClose={() => setView(null)}
         title="Detalle de la venta"
-        icon={<CircleDollarSign size={18} />}
+        icon={<Icon name="cash" size={18} />}
         size="lg"
         footer={
           <button className="btn btn-primary" onClick={() => setView(null)}>Entendido</button>
@@ -692,12 +684,12 @@ export default function Sales() {
         open={specIdx !== null}
         onClose={closeSpecs}
         title="Editar características del item"
-        icon={<SlidersHorizontal size={18} />}
+        icon={<Icon name="settings" size={18} />}
         size="lg"
         footer={
           <>
-            <button className="btn btn-ghost" onClick={closeSpecs}><X size={15} /> Cancelar</button>
-            <button className="btn btn-primary" onClick={saveSpecs}><Save size={15} /> Guardar cambios</button>
+            <button className="btn btn-ghost" onClick={closeSpecs}><Icon name="x" size={15} /> Cancelar</button>
+            <button className="btn btn-primary" onClick={saveSpecs}><Icon name="save" size={15} /> Guardar cambios</button>
           </>
         }
       >
@@ -711,20 +703,20 @@ export default function Sales() {
             <div className="flex" style={{ marginBottom: 6 }} key={i}>
               <input className="input" placeholder="Label (ej. Potencia)" value={s.label} onChange={(e) => setSpecRow(i, 'label', e.target.value)} />
               <input className="input" placeholder="Valor (ej. 70 HP)" value={s.value} onChange={(e) => setSpecRow(i, 'value', e.target.value)} />
-              <button className="btn-icon danger" onClick={() => removeSpec(i)}><Trash2 size={14} /></button>
+              <button className="btn-icon danger" onClick={() => removeSpec(i)}><Icon name="trash" size={14} /></button>
             </div>
           ))}
-          <button className="btn btn-outline btn-sm" onClick={addSpec}><Plus size={13} /> Agregar especificación</button>
+          <button className="btn btn-outline btn-sm" onClick={addSpec}><Icon name="plus" size={13} /> Agregar especificación</button>
         </div>
         <div className="field">
           <label>Características</label>
           {specForm.features.map((f, i) => (
             <div className="flex" style={{ marginBottom: 6 }} key={i}>
               <input className="input" value={f} onChange={(e) => setFeature(i, e.target.value)} />
-              <button className="btn-icon danger" onClick={() => removeFeature(i)}><Trash2 size={14} /></button>
+              <button className="btn-icon danger" onClick={() => removeFeature(i)}><Icon name="trash" size={14} /></button>
             </div>
           ))}
-          <button className="btn btn-outline btn-sm" onClick={addFeature}><Plus size={13} /> Agregar característica</button>
+          <button className="btn btn-outline btn-sm" onClick={addFeature}><Icon name="plus" size={13} /> Agregar característica</button>
         </div>
       </Modal>
 

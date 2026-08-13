@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { UploadCloud, X, FileText } from 'lucide-react';
+import Icon from './Icon';
 import { uploadFile } from '../api';
 import { useToast } from './Toast';
 
@@ -42,7 +42,7 @@ export function FileUpload({
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer.files?.[0]); }}
       >
-        {busy ? <span className="spinner" /> : isImage ? <UploadCloud size={26} /> : <FileText size={26} />}
+        {busy ? <span className="spinner" /> : isImage ? <Icon name="upload" size={26} /> : <Icon name="document" size={26} />}
         <div>{busy ? 'Subiendo archivo...' : label}</div>
       </div>
       <input
@@ -57,14 +57,14 @@ export function FileUpload({
           {isImage ? (
             <img src={value} alt="vista previa" />
           ) : (
-            <span style={{ color: 'var(--danger)' }}><FileText size={30} /></span>
+            <span style={{ color: 'var(--danger)' }}><Icon name="document" size={30} /></span>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="fname">{value.split('/').pop()}</div>
             <div className="fsize">{isImage ? 'Imagen cargada' : 'Archivo cargado'}</div>
           </div>
           <button type="button" className="btn-icon danger" onClick={() => onChange(null)} title="Quitar">
-            <X size={15} />
+            <Icon name="x" size={15} />
           </button>
         </div>
       )}

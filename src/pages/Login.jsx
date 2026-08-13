@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Tractor, Lock, ShieldCheck, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import Icon from '../components/Icon';
 import { useAuth } from '../auth';
 import { useToast } from '../components/Toast';
 import { errMsg } from '../api';
@@ -29,13 +29,13 @@ export default function Login() {
     <div className="login-bg">
       <form className="login-card" onSubmit={submit}>
         <div className="login-logo">
-          <Tractor size={36} />
+          <Icon name="tractor" size={36} />
         </div>
         <h1>Panel Administrativo</h1>
         <div className="tagline">Fabricaciones & Servicios <b style={{ color: 'var(--g-dark)' }}>El Iqueño SAC</b></div>
 
         <div className="field">
-          <label><Lock size={14} /> Contraseña de acceso</label>
+          <label><Icon name="lock" size={14} /> Contraseña de acceso</label>
           <div style={{ position: 'relative' }}>
             <input
               className="input"
@@ -52,15 +52,15 @@ export default function Login() {
               style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent' }}
               onClick={() => setShow(!show)}
             >
-              {show ? <EyeOff size={16} /> : <Eye size={16} />}
+              {show ? <Icon name="hide" size={16} /> : <Icon name="visible" size={16} />}
             </button>
           </div>
         </div>
 
         <button className="btn btn-primary btn-lg w-full" type="submit" disabled={busy} style={{ justifyContent: 'center', marginTop: 6 }}>
-          {busy ? <span className="spinner" /> : <ShieldCheck size={18} />}
+          {busy ? <span className="spinner" /> : <Icon name="security-checked" size={18} />}
           Ingresar al panel
-          {!busy && <ArrowRight size={17} />}
+          {!busy && <Icon name="arrow" size={17} />}
         </button>
 
         <div className="login-foot">

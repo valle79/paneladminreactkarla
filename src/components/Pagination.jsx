@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import Icon from './Icon';
 
 export function Pagination({ currentPage, totalPages, onPageChange, totalItems, limit }) {
   const handlePrev = () => {
@@ -54,7 +54,7 @@ export function Pagination({ currentPage, totalPages, onPageChange, totalItems, 
           onClick={handlePrev}
           disabled={currentPage === 1}
         >
-          <ChevronLeft size={16} />
+          <Icon name="chevron-left" size={16} />
         </button>
         
         {getPageNumbers().map((page, idx) =>
@@ -78,7 +78,7 @@ export function Pagination({ currentPage, totalPages, onPageChange, totalItems, 
           onClick={handleNext}
           disabled={currentPage === totalPages}
         >
-          <ChevronRight size={16} />
+          <Icon name="chevron-right" size={16} />
         </button>
       </div>
     </div>

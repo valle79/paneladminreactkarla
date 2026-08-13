@@ -1,4 +1,4 @@
-import { Search, Inbox, Loader2, Download, ExternalLink, WifiOff, RotateCcw } from 'lucide-react';
+import Icon from './Icon';
 import { useMemo, useState } from 'react';
 import { assetUrl } from '../api';
 
@@ -13,14 +13,14 @@ export function Loader({ text = 'Cargando...' }) {
 export function ErrorState({ onRetry, message = 'No se pudieron cargar los datos' }) {
   return (
     <div className="empty-state">
-      <WifiOff size={42} strokeWidth={1.4} />
+      <Icon name="wifi-off" size={42} />
       <b style={{ color: 'var(--ink)', fontSize: 14.5 }}>{message}</b>
       <span style={{ fontSize: 13, maxWidth: 380, textAlign: 'center' }}>
         Verifica que el backend esté corriendo (puerto 8000) y que la base de datos esté conectada.
       </span>
       {onRetry && (
         <button className="btn btn-primary mt-8" onClick={onRetry}>
-          <RotateCcw size={15} /> Reintentar
+          <Icon name="undo" size={15} /> Reintentar
         </button>
       )}
     </div>
@@ -30,7 +30,7 @@ export function ErrorState({ onRetry, message = 'No se pudieron cargar los datos
 export function EmptyState({ title = 'Sin registros', hint = 'No hay datos que mostrar todavía' }) {
   return (
     <div className="empty-state">
-      <Inbox size={42} strokeWidth={1.4} />
+      <Icon name="inbox" size={42} />
       <b style={{ color: 'var(--ink)', fontSize: 14.5 }}>{title}</b>
       <span style={{ fontSize: 13 }}>{hint}</span>
     </div>
@@ -51,7 +51,7 @@ export function Toolbar({ search, onSearch, placeholder = 'Buscar...', children 
     <div className="toolbar">
       {search !== undefined && (
         <div className="search">
-          <Search size={16} />
+          <Icon name="search" size={16} />
           <input
             className="input"
             placeholder={placeholder}
@@ -112,7 +112,7 @@ export function PdfLink({ url, label = 'Ficha PDF' }) {
   if (!url) return <span className="text-muted" style={{ fontSize: 12 }}>—</span>;
   return (
     <a className="pdf-chip" href={assetUrl(url)} target="_blank" rel="noreferrer">
-      <Download size={12} /> {label} <ExternalLink size={11} />
+      <Icon name="download" size={12} /> {label} <Icon name="external-link" size={11} />
     </a>
   );
 }

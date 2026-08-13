@@ -1,5 +1,5 @@
 import { useState, createContext, useContext, useCallback, useRef } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import Icon from './Icon';
 
 const ToastContext = createContext(null);
 
@@ -34,10 +34,10 @@ export function ToastProvider({ children }) {
   );
 
   const icons = {
-    success: <CheckCircle2 size={19} color="#29a744" />,
-    error: <XCircle size={19} color="#dc3545" />,
-    warning: <AlertTriangle size={19} color="#e0a800" />,
-    info: <Info size={19} color="#1e88e5" />,
+    success: <Icon name="checkmark--v1" size={19} style={{ color: '#29a744' }} />,
+    error: <Icon name="cancel" size={19} style={{ color: '#dc3545' }} />,
+    warning: <Icon name="high-priority" size={19} style={{ color: '#e0a800' }} />,
+    info: <Icon name="info" size={19} style={{ color: '#1e88e5' }} />,
   };
 
   return (
@@ -49,7 +49,7 @@ export function ToastProvider({ children }) {
             {icons[t.type]}
             <span>{t.message}</span>
             <button className="close-x" onClick={() => dismiss(t.id)}>
-              <X size={14} />
+              <Icon name="x" size={14} />
             </button>
           </div>
         ))}

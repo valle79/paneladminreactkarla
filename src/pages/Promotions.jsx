@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Tags, Save, X, Globe, Eye, EyeOff, ArrowUpDown } from 'lucide-react';
+import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
@@ -90,7 +90,7 @@ export default function Promotions() {
           <h1>Promociones</h1>
           <div className="sub">Ofertas visibles en la web y en el sistema</div>
         </div>
-        <button className="btn btn-yellow btn-lg" onClick={openAdd}><Plus size={17} /> Agregar Promoción</button>
+        <button className="btn btn-yellow btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Promoción</button>
       </div>
 
       <div className="card">
@@ -116,11 +116,11 @@ export default function Promotions() {
                   <td>
                     {r.image_url ? (
                       r.media_type === 'video' ? (
-                        <div className="thumb-wrap" style={{ position: 'relative' }}><Tags size={20} /></div>
+                        <div className="thumb-wrap" style={{ position: 'relative' }}><Icon name="price-tag" size={20} /></div>
                       ) : (
                         <a href={r.image_url} target="_blank" rel="noreferrer"><span className="thumb-wrap" style={{ width: 58, height: 58 }}><img className="thumb" src={r.image_url} alt={r.title} /></span></a>
                       )
-                    ) : <span className="thumb-wrap"><Tags size={18} /></span>}
+                    ) : <span className="thumb-wrap"><Icon name="price-tag" size={18} /></span>}
                   </td>
                   <td style={{ maxWidth: 320 }}>
                     <div className="cell-title">{r.title}</div>
@@ -134,14 +134,14 @@ export default function Promotions() {
                   </td>
                   <td>
                     <button className="btn btn-sm btn-ghost" style={{ padding: 0 }} onClick={() => toggle(r, 'show_in_web')} title="Cambiar visibilidad">
-                      {r.show_in_web ? <Badge kind="yellow"><Globe size={11} /> Visible</Badge> : <Badge kind="gray"><EyeOff size={11} /> Oculta</Badge>}
+                      {r.show_in_web ? <Badge kind="yellow"><Icon name="globe" size={11} /> Visible</Badge> : <Badge kind="gray"><Icon name="hide" size={11} /> Oculta</Badge>}
                     </button>
                   </td>
-                  <td><span className="chip"><ArrowUpDown size={12} /> {r.display_order}</span></td>
+                  <td><span className="chip"><Icon name="sort" size={12} /> {r.display_order}</span></td>
                   <td>
                     <div className="row-actions">
-                      <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Pencil size={14} /></button>
-                      <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Trash2 size={14} /></button>
+<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
+            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -165,12 +165,12 @@ export default function Promotions() {
         open={modal}
         onClose={() => setModal(false)}
         title={editingId ? 'Editar promoción' : 'Nueva promoción'}
-        icon={<Tags size={18} />}
+        icon={<Icon name="price-tag" size={18} />}
         size="lg"
         footer={
           <>
-            <button className="btn btn-ghost" onClick={() => setModal(false)}><X size={15} /> Cancelar</button>
-            <button className="btn btn-yellow" onClick={save} disabled={busy}>{busy ? <span className="spinner" /> : <Save size={15} />} Guardar promoción</button>
+            <button className="btn btn-ghost" onClick={() => setModal(false)}><Icon name="x" size={15} /> Cancelar</button>
+            <button className="btn btn-yellow" onClick={save} disabled={busy}>{busy ? <span className="spinner" /> : <Icon name="save" size={15} />} Guardar promoción</button>
           </>
         }
       >
@@ -213,7 +213,7 @@ export default function Promotions() {
           </label>
           <label className="check" style={{ alignItems: 'flex-start' }}>
             <input type="checkbox" checked={form.show_in_web} onChange={(e) => setForm({ ...form, show_in_web: e.target.checked })} />
-            <span><b>Visible en la web</b> <Eye size={12} /><br /><span className="hint">Se muestra en el sitio público del Iqueño</span></span>
+            <span><b>Visible en la web</b> <Icon name="visible" size={12} /><br /><span className="hint">Se muestra en el sitio público del Iqueño</span></span>
           </label>
         </div>
       </Modal>

@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard, Users, Tractor, Wrench, ClipboardList, UserRound, Tags,
-  ShoppingCart, LogOut, Menu, CalendarDays, Leaf, BadgeDollarSign,
-} from 'lucide-react';
+import Icon from './Icon';
 import { useAuth } from '../auth';
 import logoElIqueno from '../images/Logo-El-Iqueño.png';
 
 const NAV = [
   { section: 'Principal' },
-  { to: '/', end: true, icon: LayoutDashboard, label: 'Dashboard', section: 'Principal' },
+  { to: '/', end: true, icon: 'dashboard', label: 'Dashboard', section: 'Principal' },
   { section: 'Gestión' },
-  { to: '/asesores', icon: Users, label: 'Asesores' },
-  { to: '/productos', icon: Tractor, label: 'Productos' },
-  { to: '/repuestos', icon: Wrench, label: 'Repuestos' },
-  { to: '/servicios', icon: BadgeDollarSign, label: 'Servicios' },
-  { to: '/clientes', icon: UserRound, label: 'Clientes' },
-  { to: '/promociones', icon: Tags, label: 'Promociones' },
-  { to: '/ventas', icon: ShoppingCart, label: 'Ventas' },
+  { to: '/asesores', icon: 'conference', label: 'Asesores' },
+  { to: '/productos', icon: 'tractor', label: 'Productos' },
+  { to: '/repuestos', icon: 'wrench', label: 'Repuestos' },
+  { to: '/servicios', icon: 'money-bag', label: 'Servicios' },
+  { to: '/clientes', icon: 'user-male-circle', label: 'Clientes' },
+  { to: '/promociones', icon: 'price-tag', label: 'Promociones' },
+  { to: '/ventas', icon: 'shopping-cart', label: 'Ventas' },
 ];
 
 const TITLES = {
@@ -65,7 +62,7 @@ export default function Layout({ children }) {
                 className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
                 onClick={() => setOpen(false)}
               >
-                <item.icon size={18} />
+                <Icon name={item.icon} size={18} />
                 {item.label}
               </NavLink>
             ) : null
@@ -80,7 +77,7 @@ export default function Layout({ children }) {
               <small>Panel de control</small>
             </span>
             <button className="btn-icon" style={{ marginLeft: 'auto', borderColor: 'rgba(255,255,255,0.15)', color: '#c8dfd0' }} onClick={logout} title="Cerrar sesión">
-              <LogOut size={15} />
+              <Icon name="exit" size={15} />
             </button>
           </div>
         </div>
@@ -89,17 +86,17 @@ export default function Layout({ children }) {
       <div className="main">
         <header className="topbar">
           <button className="btn-icon menu-btn" onClick={() => setOpen(true)}>
-            <Menu size={18} />
+            <Icon name="menu" size={18} />
           </button>
           <div className="crumb">
             <b>{title}</b>
           </div>
           <span style={{ flex: 1 }} />
           <span className="date-chip">
-            <CalendarDays size={14} /> {today}
+            <Icon name="calendar" size={14} /> {today}
           </span>
           <span className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Leaf size={12} /> El Iqueño SAC
+            <Icon name="leaf" size={12} /> El Iqueño SAC
           </span>
         </header>
 

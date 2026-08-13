@@ -1,4 +1,4 @@
-import { X, Check, AlertTriangle } from 'lucide-react';
+import Icon from './Icon';
 import { useEffect, useState } from 'react';
 
 export function Modal({ open, onClose, title, icon, children, footer, size = '' }) {
@@ -24,7 +24,7 @@ export function Modal({ open, onClose, title, icon, children, footer, size = '' 
             {title}
           </h3>
           <button className="modal-close" onClick={onClose}>
-            <X size={16} />
+            <Icon name="x" size={16} />
           </button>
         </div>
         <div className="modal-body">{children}</div>
@@ -41,12 +41,12 @@ export function ConfirmModal({ open, onClose, onConfirm, title, message, confirm
       onClose={onClose}
       title={title}
       size="sm"
-      icon={<AlertTriangle size={18} />}
+      icon={<Icon name="high-priority" size={18} />}
       footer={
         <>
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn btn-danger" onClick={onConfirm} disabled={loading}>
-            {loading ? <span className="spinner" /> : <Check size={15} />} {confirmText}
+            {loading ? <span className="spinner" /> : <Icon name="checkmark" size={15} />} {confirmText}
           </button>
         </>
       }

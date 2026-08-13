@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Save, X, UserRound, Building2, RotateCcw, Phone, BadgeCheck } from 'lucide-react';
+import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
@@ -112,7 +112,7 @@ function DniTab() {
       <div className="card">
         <Toolbar search={q} onSearch={setQ} placeholder="Buscar por DNI o nombre...">
           <span className="pill-count">{pagination?.total || 0} clientes</span>
-          <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> Agregar Cliente</button>
+          <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={16} /> Agregar Cliente</button>
         </Toolbar>
         <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--line)', borderRadius: 0 }}>
           <table className="data">
@@ -131,11 +131,11 @@ function DniTab() {
                   <td>
                     <div className="row-actions">
                       {r.deleted ? (
-                        <button className="btn-icon" onClick={() => restore(r)} title="Restaurar"><RotateCcw size={14} /></button>
+                        <button className="btn-icon" onClick={() => restore(r)} title="Restaurar"><Icon name="undo" size={14} /></button>
                       ) : (
                         <>
-                          <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Pencil size={14} /></button>
-                          <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Trash2 size={14} /></button>
+<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
+            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
                         </>
                       )}
                     </div>
@@ -161,11 +161,11 @@ function DniTab() {
         open={modal}
         onClose={() => setModal(false)}
         title={editingId ? 'Editar cliente DNI' : 'Nuevo cliente DNI'}
-        icon={<UserRound size={18} />}
+        icon={<Icon name="user-male-circle" size={18} />}
         footer={
           <>
-            <button className="btn btn-ghost" onClick={() => setModal(false)}><X size={15} /> Cancelar</button>
-            <button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? <span className="spinner" /> : <Save size={15} />} Guardar</button>
+            <button className="btn btn-ghost" onClick={() => setModal(false)}><Icon name="x" size={15} /> Cancelar</button>
+            <button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? <span className="spinner" /> : <Icon name="save" size={15} />} Guardar</button>
           </>
         }
       >
@@ -174,7 +174,7 @@ function DniTab() {
           <div className="flex" style={{ gap: 8 }}>
             <input className="input" maxLength={8} placeholder="8 dígitos" value={form.dni} onChange={(e) => setForm({ ...form, dni: e.target.value.replace(/\D/g, '') })} />
             <button type="button" className="btn btn-yellow" style={{ minWidth: 120, flexShrink: 0 }} onClick={consultarDni} disabled={consulting}>
-              {consulting ? <span className="spinner" /> : <BadgeCheck size={15} />} Consultar
+              {consulting ? <span className="spinner" /> : <Icon name="checked-user-male" size={15} />} Consultar
             </button>
           </div>
           {source && <div className="hint" style={{ marginTop: 4 }}>Datos obtenidos de {source}</div>}
@@ -325,7 +325,7 @@ function RucTab() {
       <div className="card">
         <Toolbar search={q} onSearch={setQ} placeholder="Buscar por RUC o razón social...">
           <span className="pill-count">{pagination?.total || 0} empresas</span>
-          <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> Agregar Empresa</button>
+          <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={16} /> Agregar Empresa</button>
         </Toolbar>
         <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--line)', borderRadius: 0 }}>
           <table className="data">
@@ -342,18 +342,18 @@ function RucTab() {
                   <td className="text-muted">{r.nombrecomercial || '—'}</td>
                   <td>
                     <span className="flex" style={{ color: '#1eaa47', fontSize: 12.5 }}>
-                      <Phone size={12} /> {(Array.isArray(r.telefonos) ? r.telefonos.join(', ') : r.telefonos) || '—'}
+                      <Icon name="phone" size={12} /> {(Array.isArray(r.telefonos) ? r.telefonos.join(', ') : r.telefonos) || '—'}
                     </span>
                   </td>
                   <td className="text-muted" style={{ fontSize: 12.5 }}>{[r.departamento, r.provincia, r.distrito].filter(Boolean).join(' · ') || '—'}</td>
                   <td>
                     <div className="row-actions">
                       {r.deleted ? (
-                        <button className="btn-icon" onClick={() => restore(r)} title="Restaurar"><RotateCcw size={14} /></button>
+                        <button className="btn-icon" onClick={() => restore(r)} title="Restaurar"><Icon name="undo" size={14} /></button>
                       ) : (
                         <>
-                          <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Pencil size={14} /></button>
-                          <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Trash2 size={14} /></button>
+<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
+            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
                         </>
                       )}
                     </div>
@@ -379,12 +379,12 @@ function RucTab() {
         open={modal}
         onClose={() => setModal(false)}
         title={editingId ? 'Editar empresa' : 'Nueva empresa'}
-        icon={<Building2 size={18} />}
+        icon={<Icon name="building" size={18} />}
         size="lg"
         footer={
           <>
-            <button className="btn btn-ghost" onClick={() => setModal(false)}><X size={15} /> Cancelar</button>
-            <button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? <span className="spinner" /> : <Save size={15} />} Guardar</button>
+            <button className="btn btn-ghost" onClick={() => setModal(false)}><Icon name="x" size={15} /> Cancelar</button>
+            <button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? <span className="spinner" /> : <Icon name="save" size={15} />} Guardar</button>
           </>
         }
       >
@@ -393,7 +393,7 @@ function RucTab() {
           <div className="flex" style={{ gap: 8 }}>
             <input className="input" maxLength={11} placeholder="11 dígitos" value={form.ruc} onChange={(e) => setForm({ ...form, ruc: e.target.value.replace(/\D/g, '') })} />
             <button type="button" className="btn btn-yellow" style={{ minWidth: 120, flexShrink: 0 }} onClick={consultarRuc} disabled={consulting}>
-              {consulting ? <span className="spinner" /> : <BadgeCheck size={15} />} Consultar
+              {consulting ? <span className="spinner" /> : <Icon name="checked-user-male" size={15} />} Consultar
             </button>
           </div>
           {source && <div className="hint" style={{ marginTop: 4 }}>Datos obtenidos de {source}</div>}
@@ -455,8 +455,8 @@ export default function Clients() {
         </div>
       </div>
       <div className="tabs">
-        <button className={`tab ${tab === 'dni' ? 'active' : ''}`} onClick={() => setTab('dni')}><UserRound size={15} /> Personas (DNI)</button>
-        <button className={`tab ${tab === 'ruc' ? 'active' : ''}`} onClick={() => setTab('ruc')}><Building2 size={15} /> Empresas (RUC)</button>
+<button className={`tab ${tab === 'dni' ? 'active' : ''}`} onClick={() => setTab('dni')}><Icon name="user-male-circle" size={15} /> Personas (DNI)</button>
+            <button className={`tab ${tab === 'ruc' ? 'active' : ''}`} onClick={() => setTab('ruc')}><Icon name="building" size={15} /> Empresas (RUC)</button>
       </div>
       {tab === 'dni' ? <DniTab /> : <RucTab />}
     </>
