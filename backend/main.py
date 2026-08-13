@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 import consulta_docs
 import db
+import storage
 from auth import create_token, require_auth
 
 load_dotenv()
@@ -919,6 +920,9 @@ def upload_file(file: UploadFile = File(...), _: dict = Depends(require_auth)):
     data = file.file.read()
     if len(data) > MAX_SIZE:
         raise HTTPException(status_code=400, detail="El archivo supera el tamaño máximo (60MB)")
+    if storage.is_configured():
+        url = storage.upload_bytes(data, file.filename or f"file{ext}")
+        return {"url": url}
     name = f"{uuid.uuid4().hex}{ext}"
     (UPLOAD_DIR / name).write_bytes(data)
     return {"url": f"/uploads/{name}"}

@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+*.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Entorno / secretos
+.env
+.env.local
+.env.production
+
+# Archivos subidos localmente (se almacenan en Cloudinary en producción)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Editor / SO
+.vscode/
+.DS_Store
+Thumbs.db

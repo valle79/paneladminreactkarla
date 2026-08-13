@@ -80,6 +80,18 @@ POST   /api/upload               → { url }  (imagen / pdf / video)
 Todas las rutas (excepto login y health) requieren el header `Authorization: Bearer <token>`.
 Documentación interactiva: http://localhost:8000/docs
 
+## Despliegue
+
+### Backend (Railway)
+1. Crea el proyecto en dashboard.railway.com → **New Project** → **Deploy from GitHub repo** → `valle79/paneladminreactkarla`.
+2. En **Settings → Root Directory** pon `backend` (config incluida en `backend/nixpacks.toml`).
+3. En **Variables** agrega: `DATABASE_URL`, `AUTH_PASSWORD`, `AUTH_SECRET`, `DECOLECTA_TOKEN`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (PORT lo pone Railway automáticamente).
+4. Healthcheck: `/api/health`.
+5. Para migrar archivos locales a Cloudinary: `python backend/migrate_uploads.py`.
+
+### Frontend (Netlify)
+Configura la variable `VITE_API_URL` con la URL de la API de Railway y haz build desde la raíz del proyecto.
+
 ## Notas
 
 - El proyecto NO modifica nada de `panelAdminIqueno`; usa las mismas tablas y columnas, así que si algún día vuelves a Supabase, los datos son compatibles.
