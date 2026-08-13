@@ -82,15 +82,16 @@ Documentación interactiva: http://localhost:8000/docs
 
 ## Despliegue
 
-### Backend (Railway)
-1. Crea el proyecto en dashboard.railway.com → **New Project** → **Deploy from GitHub repo** → `valle79/paneladminreactkarla`.
-2. En **Settings → Root Directory** pon `backend` (config incluida en `backend/nixpacks.toml`).
-3. En **Variables** agrega: `DATABASE_URL`, `AUTH_PASSWORD`, `AUTH_SECRET`, `DECOLECTA_TOKEN`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (PORT lo pone Railway automáticamente).
-4. Healthcheck: `/api/health`.
-5. Para migrar archivos locales a Cloudinary: `python backend/migrate_uploads.py`.
+### Backend (Koyeb)
+1. Crea la app en app.koyeb.com → **Create App** → conécta el repo GitHub `valle79/paneladminreactkarla` (rama `develop`).
+2. En **Builder**: expande la sección y en **Work directory** pon `backend` (el `Dockerfile` está en `backend/Dockerfile`).
+3. En **Exposed ports**: `8000`.
+4. En **Environment variables** agrega: `DATABASE_URL`, `AUTH_PASSWORD`, `AUTH_SECRET`, `DECOLECTA_TOKEN`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (PORT lo asigna Koyeb automáticamente al puerto expuesto).
+5. Healthcheck: `/api/health` (configurable en **Health Checks**).
+6. Para migrar archivos locales a Cloudinary: `python backend/migrate_uploads.py`.
 
 ### Frontend (Netlify)
-Configura la variable `VITE_API_URL` con la URL de la API de Railway y haz build desde la raíz del proyecto.
+Configura la variable `VITE_API_URL` con la URL de la API de Koyeb y haz build desde la raíz del proyecto.
 
 ## Notas
 
