@@ -2,8 +2,10 @@ import axios from 'axios';
 
 const TOKEN_KEY = 'iqueno_token';
 
+export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
 export const api = axios.create({
-  baseURL: '/api',
+  baseURL: `${API_URL}/api`,
   timeout: 30000,
 });
 
@@ -53,7 +55,7 @@ export async function uploadFile(file) {
   const token = localStorage.getItem(TOKEN_KEY);
   const fd = new FormData();
   fd.append('file', file);
-  const res = await axios.post('/api/upload', fd, {
+  const res = await axios.post(`${API_URL}/api/upload`, fd, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.data.url;
@@ -61,7 +63,8 @@ export async function uploadFile(file) {
 
 export function assetUrl(path) {
   if (!path) return null;
-  return path.startsWith('http') ? path : path;
+  if (/^https?:\/\//.test(path)) return path;
+  return `${API_URL}${path}`;
 }
 
 export { fileApi };

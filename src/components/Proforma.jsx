@@ -3,6 +3,7 @@ import { Printer, Eye, CheckCircle2, X } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { Modal } from './Modal';
 import { COMPANY, PROFORMA_DEFAULTS, formatDocNumber, formatMoneyPLN } from '../config';
+import { API_URL } from '../api';
 import logoElIqueno from '../images/Logo-El-Iqueño.png';
 
 /* ============================================================
@@ -37,8 +38,7 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
   const igv = Number(sale.igv || 0);
   const total = Number(sale.total || 0);
 
-  const imgBase = typeof window !== 'undefined' ? window.location.origin : '';
-  const absImg = (u) => (u && /^https?:\/\//.test(u) ? u : imgBase + u);
+  const absImg = (u) => (u && /^https?:\/\//.test(u) ? u : API_URL + u);
   const itemsConFoto = (sale.items || []).filter((it) => it.image_url);
 
   const descriptionLine = (item) => {
