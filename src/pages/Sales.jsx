@@ -96,6 +96,10 @@ export default function Sales() {
   const [pagination, setPagination] = useState(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [quick, setQuick] = useState({});
+  const [quickBusy, setQuickBusy] = useState(false);
+  const [phoneDraft, setPhoneDraft] = useState('');
+  const [phoneBusy, setPhoneBusy] = useState(false);
 
   const load = () => {
     setFailed(false);
@@ -137,6 +141,7 @@ export default function Sales() {
 
   const validate = () => {
     if (!form.client_id) return toast.warning('Selecciona un cliente');
+    if (form.client_id === '__new__') return toast.warning('Completa los datos y crea el nuevo cliente para continuar');
     if (form.items.length === 0) return toast.warning('Agrega al menos un item');
     if (!isProformaLike && !form.invoice_number) return toast.warning('Indica el número de documento');
     if (form.payment_status === 'a_cuenta' && (!form.amount_paid || Number(form.amount_paid) <= 0))
@@ -229,11 +234,15 @@ export default function Sales() {
 
   const openAdd = async () => {
     setEditingId(null);
+    setQuick({});
+    setPhoneDraft('');
     setForm({ ...emptySale, invoice_type: 'boleta' });
     setModal(true);
   };
   const openEdit = (s) => {
     setEditingId(s.id);
+    setQuick({});
+    setPhoneDraft('');
     setForm({
       client_type: s.client_type || 'dni',
       client_id: s.client_id || '',
@@ -461,6 +470,106 @@ export default function Sales() {
 
   const clientList = form.client_type === 'dni' ? cats?.clients || [] : cats?.ruc || [];
 
+  const selClient =
+    form.client_id && form.client_id !== '__new__'
+      ? clientList.find((c) => String(c.id) === String(form.client_id))
+      : null;
+
+  const clientPhoneValue = (c) =>
+    form.client_type === 'ruc'
+      ? (Array.isArray(c?.telefonos) ? c.telefonos[0] : c?.telefonos)
+      : c?.phone;
+
+  const saveQuickClient = async () => {
+    if (form.client_type === 'dni') {
+      const dni = String(quick.dni || '').replace(/\D/g, '');
+      if (!/^\d{8}$/.test(dni)) return toast.warning('El DNI debe tener 8 dígitos');
+      if (!String(quick.names || '').trim() || !String(quick.last_names || '').trim())
+        return toast.warning('Nombres y apellidos son obligatorios');
+      const dup = (cats?.clients || []).find((c) => c.dni === dni);
+      if (dup) {
+        toast.warning('El cliente ya existe — se seleccionó del listado');
+        return setForm((f) => ({ ...f, client_id: dup.id }));
+      }
+      setQuickBusy(true);
+      try {
+        const r = await api.post('/clients', {
+          dni,
+          names: String(quick.names).trim(),
+          last_names: String(quick.last_names).trim(),
+          address: String(quick.address || '').trim() || null,
+          phone: String(quick.phone || '').replace(/\D/g, '') || null,
+        });
+        setCats((c) => ({ ...c, clients: [...(c?.clients || []), r.data] }));
+        setForm((f) => ({ ...f, client_id: r.data.id }));
+        toast.success('Cliente creado y seleccionado');
+      } catch (e) {
+        toast.error(errMsg(e));
+      } finally {
+        setQuickBusy(false);
+      }
+    } else {
+      const ruc = String(quick.ruc || '').replace(/\D/g, '');
+      if (!/^\d{11}$/.test(ruc)) return toast.warning('El RUC debe tener 11 dígitos');
+      if (!String(quick.razonsocial || '').trim()) return toast.warning('La razón social es obligatoria');
+      const dup = (cats?.ruc || []).find((c) => c.ruc === ruc);
+      if (dup) {
+        toast.warning('La empresa ya existe — se seleccionó del listado');
+        return setForm((f) => ({ ...f, client_id: dup.id }));
+      }
+      setQuickBusy(true);
+      try {
+        const phone = String(quick.phone || '').replace(/\D/g, '');
+        const r = await api.post('/clients-ruc', {
+          ruc,
+          razonsocial: String(quick.razonsocial).trim(),
+          telefonos: phone ? [phone] : [],
+        });
+        setCats((c) => ({ ...c, ruc: [...(c?.ruc || []), r.data] }));
+        setForm((f) => ({ ...f, client_id: r.data.id }));
+        toast.success('Empresa creada y seleccionada');
+      } catch (e) {
+        toast.error(errMsg(e));
+      } finally {
+        setQuickBusy(false);
+      }
+    }
+  };
+
+  const saveClientPhone = async () => {
+    const phone = String(phoneDraft || '').replace(/\D/g, '');
+    if (!phone) return toast.warning('Escribe un número de teléfono');
+    if (phone.length < 7) return toast.warning('El número es muy corto');
+    if (!selClient) return;
+    setPhoneBusy(true);
+    try {
+      if (form.client_type === 'ruc') {
+        await api.put(`/clients-ruc/${selClient.id}`, { telefonos: [phone] });
+      } else {
+        await api.put(`/clients/${selClient.id}`, { phone });
+      }
+      const updated = { ...selClient, ...(form.client_type === 'ruc' ? { telefonos: [phone] } : { phone }) };
+      const listKey = form.client_type === 'ruc' ? 'ruc' : 'clients';
+      setCats((c) => ({
+        ...c,
+        [listKey]: (c?.[listKey] || []).map((x) => (x.id === selClient.id ? updated : x)),
+      }));
+      setRows((rs) =>
+        (rs || []).map((s) =>
+          s.client_id === selClient.id
+            ? { ...s, client: { ...s.client, ...(form.client_type === 'ruc' ? { telefonos: [phone] } : { phone }) } }
+            : s
+        )
+      );
+      setPhoneDraft('');
+      toast.success('Teléfono guardado');
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setPhoneBusy(false);
+    }
+  };
+
   return (
     <>
       <div className="page-head">
@@ -589,15 +698,16 @@ export default function Sales() {
         <div className="grid-3">
           <div className="field">
             <label><Icon name="user-male" size={14} /> Tipo de cliente</label>
-            <select className="select" value={form.client_type} onChange={(e) => setForm({ ...form, client_type: e.target.value, client_id: '' })}>
+            <select className="select" value={form.client_type} onChange={(e) => { setForm({ ...form, client_type: e.target.value, client_id: '' }); setQuick({}); setPhoneDraft(''); }}>
               <option value="dni">Persona (DNI)</option>
               <option value="ruc">Empresa (RUC)</option>
             </select>
           </div>
           <div className="field" style={{ gridColumn: 'span 2' }}>
             <label><Icon name="user-male-circle" size={14} /> Cliente <span className="req">*</span></label>
-            <select className="select" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
+            <select className="select" value={form.client_id} onChange={(e) => { setForm({ ...form, client_id: e.target.value }); setQuick({}); setPhoneDraft(''); }}>
               <option value="">— Seleccionar cliente —</option>
+              <option value="__new__">＋ Nuevo cliente…</option>
               {clientList.map((c) => (
                 <option key={c.id} value={c.id}>
                   {form.client_type === 'dni'
@@ -608,6 +718,56 @@ export default function Sales() {
             </select>
           </div>
         </div>
+
+        {form.client_id === '__new__' ? (
+          <div className="quick-client">
+            <div className="quick-client-title">
+              <Icon name="plus" size={13} /> Crear {form.client_type === 'dni' ? 'cliente (DNI)' : 'empresa (RUC)'}
+            </div>
+            <div className="grid-2">
+              {form.client_type === 'dni' ? (
+                <>
+                  <div className="field"><label>DNI <span className="req">*</span></label><input className="input" maxLength={8} placeholder="8 dígitos" value={quick.dni || ''} onChange={(e) => setQuick({ ...quick, dni: e.target.value.replace(/\D/g, '') })} /></div>
+                  <div className="field"><label>Nombres <span className="req">*</span></label><input className="input" value={quick.names || ''} onChange={(e) => setQuick({ ...quick, names: e.target.value })} /></div>
+                  <div className="field"><label>Apellidos <span className="req">*</span></label><input className="input" value={quick.last_names || ''} onChange={(e) => setQuick({ ...quick, last_names: e.target.value })} /></div>
+                  <div className="field"><label>Teléfono / WhatsApp</label><input className="input" maxLength={9} placeholder="Opcional" value={quick.phone || ''} onChange={(e) => setQuick({ ...quick, phone: e.target.value.replace(/\D/g, '') })} /></div>
+                  <div className="field" style={{ gridColumn: 'span 2' }}><label>Dirección</label><input className="input" value={quick.address || ''} onChange={(e) => setQuick({ ...quick, address: e.target.value })} /></div>
+                </>
+              ) : (
+                <>
+                  <div className="field"><label>RUC <span className="req">*</span></label><input className="input" maxLength={11} placeholder="11 dígitos" value={quick.ruc || ''} onChange={(e) => setQuick({ ...quick, ruc: e.target.value.replace(/\D/g, '') })} /></div>
+                  <div className="field"><label>Razón social <span className="req">*</span></label><input className="input" value={quick.razonsocial || ''} onChange={(e) => setQuick({ ...quick, razonsocial: e.target.value })} /></div>
+                  <div className="field"><label>Teléfono / WhatsApp</label><input className="input" maxLength={9} placeholder="Opcional" value={quick.phone || ''} onChange={(e) => setQuick({ ...quick, phone: e.target.value.replace(/\D/g, '') })} /></div>
+                </>
+              )}
+            </div>
+            <div className="flex" style={{ gap: 8, marginTop: 4 }}>
+              <button className="btn btn-primary" onClick={saveQuickClient} disabled={quickBusy}>
+                {quickBusy ? <span className="spinner" /> : <Icon name="plus" size={15} />} Crear y seleccionar
+              </button>
+              <button className="btn btn-ghost" onClick={() => setForm((f) => ({ ...f, client_id: '' }))}><Icon name="x" size={15} /> Cancelar</button>
+            </div>
+          </div>
+        ) : selClient && !clientPhoneValue(selClient) ? (
+          <div className="quick-phone">
+            <Icon name="whatsapp" size={15} />
+            <span>
+              <b>{selClient.names ? `${selClient.names} ${selClient.last_names || ''}` : selClient.razonsocial}</b>{' '}
+              no tiene teléfono registrado — agrégalo para poder enviarle documentos por WhatsApp:
+            </span>
+            <input
+              className="input"
+              maxLength={9}
+              placeholder="Ej. 987654321"
+              value={phoneDraft}
+              onChange={(e) => setPhoneDraft(e.target.value.replace(/\D/g, ''))}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveClientPhone(); } }}
+            />
+            <button className="btn btn-yellow" onClick={saveClientPhone} disabled={phoneBusy}>
+              {phoneBusy ? <span className="spinner" /> : <Icon name="save" size={14} />} Guardar
+            </button>
+          </div>
+        ) : null}
 
         <div className="grid-3">
           <div className="field">

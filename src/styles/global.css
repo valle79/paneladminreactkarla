@@ -990,6 +990,19 @@ kbd.hint-key { background: #eef1ef; border: 1px solid var(--line); border-bottom
 .btn-icon.pay:hover { background: var(--g-soft); color: var(--g-primary); }
 .btn-icon.wa { color: #128c4a; border-color: rgba(37, 211, 102, 0.5); }
 .btn-icon.wa:hover { background: #e6f9ee; border-color: #25d366; color: #0c7a3f; }
+.quick-client {
+  margin-top: 10px; padding: 14px; border: 1px dashed var(--g-primary);
+  background: var(--g-softer); border-radius: 12px;
+}
+.quick-client-title { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; color: var(--g-dark); margin-bottom: 10px; }
+.quick-phone {
+  margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px solid #ffe2a1; background: #fff8e8; border-radius: 10px;
+  font-size: 13px; color: var(--muted);
+}
+.quick-phone .input { width: 170px; }
+.quick-phone .btn { flex-shrink: 0; }
+@media (max-width: 640px) { .quick-phone .input { width: 100%; } .quick-phone .btn { width: 100%; } }
 @media (max-width: 640px) { .date-range { flex-wrap: wrap; } .date-range .input { width: 100%; } }
 
 /* ---------- Vista pública de documento (WhatsApp) ---------- */
