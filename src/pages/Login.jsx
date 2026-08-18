@@ -3,9 +3,11 @@ import Icon from '../components/Icon';
 import { useAuth } from '../auth';
 import { useToast } from '../components/Toast';
 import { errMsg } from '../api';
+import logoElIqueno from '../images/Logo-El-Iqueño.png';
+import iqueñoImage from '../images/iqueñov2.png';
 
-const IMG = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=1600&auto=format&fit=crop';
-const IMG_FALLBACK = 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?q=80&w=1600&auto=format&fit=crop';
+const IMG = iqueñoImage;
+const IMG_FALLBACK = iqueñoImage;
 
 const FEATURES = ['Cultivadoras', 'Cosechadoras', 'Repuestos', 'Asesoría técnica'];
 
@@ -39,16 +41,7 @@ export default function Login() {
         <img src={IMG} onError={(e) => { e.target.src = IMG_FALLBACK; }} alt="Campo agrícola" />
         <div className="login-media-veil" />
         <div className="login-media-content">
-          <span className="login-media-bar" />
-          <h2>
-            Fabricaciones & Servicios
-            <br />
-            <b>El Iqueño S.A.C.</b>
-          </h2>
-          <p>Maquinaria agrícola, cultivadoras, repuestos y atención personalizada para el campo peruano.</p>
-          <div className="login-media-chips">
-            {FEATURES.map((f) => <span key={f}>{f}</span>)}
-          </div>
+
         </div>
       </div>
 
@@ -56,7 +49,7 @@ export default function Login() {
       <div className="login-form-side">
         <div className="login-form-wrap">
           <div className="login-brand">
-            <div className="login-brand-ico"><Icon name="tractor" size={30} /></div>
+            <img src={logoElIqueno} alt="El Iqueño SAC" className="login-brand-logo" />
             <div>
               <h1>EL IQUEÑO SAC</h1>
               <p>Panel de gestión</p>
@@ -74,7 +67,7 @@ export default function Login() {
 
           <form onSubmit={submit}>
             <div className="field">
-              <label><Icon name="lock" size={13} /> Contraseña de acceso</label>
+              <label> Ingresa tu contraseña</label>
               <div className="input-icon">
                 <Icon name="lock" size={16} />
                 <input

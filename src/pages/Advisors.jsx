@@ -123,7 +123,7 @@ export default function Advisors() {
                   <td>
                     <div className="flex">
                       <AvatarCell src={r.image_url} name={r.name} />
-                      <div><div className="cell-title">{r.name}</div><div style={{ fontSize: 11.5, color: 'var(--faint)' }}>ID {r.id}</div></div>
+                      <div><div className="cell-title">{r.name}</div><div style={{ fontSize: 11.5, color: 'var(--faint)' }}></div></div>
                     </div>
                   </td>
                   <td><span className="chip">{r.position || '—'}</span></td>

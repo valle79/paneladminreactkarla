@@ -91,9 +91,18 @@ export function ImageCell({ src, alt = 'imagen', width = 58 }) {
           </a>
         </span>
       ) : (
-        <span style={{ fontSize: width / 3.4, opacity: 0.35 }}>
-          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='%23a3b8aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2' ry='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E" style={{ width: 30, height: 30 }} alt="" />
-        </span>
+        <span
+          aria-hidden
+          style={{
+            width: 28,
+            height: 28,
+            display: 'inline-block',
+            backgroundColor: '#a3b8aa',
+            WebkitMask: 'no-repeat center / contain url(https://img.icons8.com/ios/64/image.png)',
+            mask: 'no-repeat center / contain url(https://img.icons8.com/ios/64/image.png)',
+            opacity: 0.55,
+          }}
+        />
       )}
     </span>
   );
