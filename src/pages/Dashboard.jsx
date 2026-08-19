@@ -6,7 +6,7 @@ import {
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import {
-  Loader, ErrorState, fmtMoney, fmtDateTime, StatusBadge, DocTypeBadge, InvoiceBadge,
+  Loader, ErrorState, fmtMoney, fmtDateTime, fmtDate, StatusBadge, DocTypeBadge, InvoiceBadge,
 } from '../components/ui';
 
 export default function Dashboard() {
@@ -121,7 +121,14 @@ export default function Dashboard() {
                   </td>
                   <td className="text-muted">—</td>
                   <td className="money"><b>{fmtMoney(s.total)}</b></td>
-                  <td><StatusBadge value={s.payment_status} /></td>
+                  <td>
+                    <StatusBadge value={s.payment_status} />
+                    {s.payment_status === 'pagado' && s.payment_date && (
+                      <div className="text-muted" style={{ fontSize: 11.5, marginTop: 3, whiteSpace: 'nowrap' }}>
+                        Cancelado: {fmtDate(s.payment_date)}
+                      </div>
+                    )}
+                  </td>
                   <td className="text-muted">{fmtDateTime(s.created_at)}</td>
                 </tr>
               ))}

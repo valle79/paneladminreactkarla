@@ -7,10 +7,11 @@ Ejecutar:  uvicorn main:app --reload --port 8000
 
 import os
 import uuid
+from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -18,6 +19,7 @@ from pydantic import BaseModel
 import consulta_docs
 import db
 import storage
+import whatsapp
 from auth import create_token, require_auth
 
 load_dotenv()
@@ -103,34 +105,55 @@ def consultar_ruc_endpoint(payload: RucConsultaRequest, _: dict = Depends(requir
 @app.get("/api/stats")
 def get_stats(_: dict = Depends(require_auth)):
     def stats():
+        conn = db.get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT
+                         (SELECT COUNT(*)::int FROM advisors WHERE NOT deleted) advisors,
+                         (SELECT COUNT(*)::int FROM machine_products WHERE NOT deleted) products,
+                         (SELECT COUNT(*)::int FROM spare_parts WHERE NOT deleted) spare_parts,
+                         (SELECT COUNT(*)::int FROM clients WHERE NOT deleted) clients,
+                         (SELECT COUNT(*)::int FROM clients_ruc WHERE NOT deleted) clients_ruc,
+                         (SELECT COUNT(*)::int FROM sales WHERE NOT deleted) sales,
+                         (SELECT COUNT(*)::int FROM promotions WHERE is_active) promotions,
+                         (SELECT COALESCE(SUM(subtotal),0)::float FROM sales WHERE NOT deleted AND payment_status <> 'por_pagar') subtotal,
+                         (SELECT COALESCE(SUM(igv),0)::float FROM sales WHERE NOT deleted AND payment_status <> 'por_pagar') igv,
+                         (SELECT COALESCE(SUM(total),0)::float FROM sales WHERE NOT deleted AND payment_status <> 'por_pagar') total"""
+                )
+                row = cur.fetchone()
+                cur.execute(
+                    """SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') mes,
+                              COALESCE(SUM(total),0)::float total
+                       FROM sales WHERE NOT deleted
+                       GROUP BY 1 ORDER BY 1 DESC LIMIT 6"""
+                )
+                monthly = [dict(r) for r in cur.fetchall()]
+                cur.execute(
+                    """SELECT id, invoice_type, invoice_number, total,
+                              payment_status, payment_date, created_at
+                       FROM sales WHERE NOT deleted ORDER BY created_at DESC LIMIT 5"""
+                )
+                recent = [dict(r) for r in cur.fetchall()]
+        finally:
+            db.close_conn(conn)
         return {
             "counts": {
-                "advisors": db.fetch_one("SELECT COUNT(*)::int c FROM advisors WHERE NOT deleted")["c"],
-                "products": db.fetch_one("SELECT COUNT(*)::int c FROM machine_products WHERE NOT deleted")["c"],
-                "spare_parts": db.fetch_one("SELECT COUNT(*)::int c FROM spare_parts WHERE NOT deleted")["c"],
-                "clients": db.fetch_one("SELECT COUNT(*)::int c FROM clients WHERE NOT deleted")["c"],
-                "clients_ruc": db.fetch_one("SELECT COUNT(*)::int c FROM clients_ruc WHERE NOT deleted")["c"],
-                "sales": db.fetch_one("SELECT COUNT(*)::int c FROM sales WHERE NOT deleted")["c"],
-                "promotions": db.fetch_one("SELECT COUNT(*)::int c FROM promotions WHERE is_active")["c"],
+                "advisors": row["advisors"],
+                "products": row["products"],
+                "spare_parts": row["spare_parts"],
+                "clients": row["clients"],
+                "clients_ruc": row["clients_ruc"],
+                "sales": row["sales"],
+                "promotions": row["promotions"],
             },
-            "totals": db.fetch_one(
-                """SELECT
-                     COALESCE(SUM(subtotal),0)::float subtotal,
-                     COALESCE(SUM(igv),0)::float igv,
-                     COALESCE(SUM(total),0)::float total
-                   FROM sales WHERE NOT deleted AND payment_status <> 'por_pagar'"""
-            ),
-            "monthly": db.fetch_all(
-                """SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') mes,
-                          COALESCE(SUM(total),0)::float total
-                   FROM sales WHERE NOT deleted
-                   GROUP BY 1 ORDER BY 1 DESC LIMIT 6"""
-            ),
-            "recent": db.fetch_all(
-                """SELECT id, invoice_type, invoice_number, total,
-                          payment_status, created_at
-                   FROM sales WHERE NOT deleted ORDER BY created_at DESC LIMIT 5"""
-            ),
+            "totals": {
+                "subtotal": row["subtotal"],
+                "igv": row["igv"],
+                "total": row["total"],
+            },
+            "monthly": monthly,
+            "recent": recent,
         }
     return _conn_or_400(stats)
 
@@ -722,18 +745,19 @@ def list_sales(
 
         wh = f"WHERE {' AND '.join(conds)}" if conds else ""
 
-        # Total count (con filtros)
-        total = db.fetch_one(f"SELECT COUNT(*)::int AS total FROM sales {wh}", params or None)["total"]
-
         # Paginación
         page_num = max(1, page)
         page_limit = min(max(1, limit), 100)
         offset = (page_num - 1) * page_limit
 
+        # Conteo + filas en UNA consulta (window function) para evitar un round-trip extra
         rows = db.fetch_all(
-            f"SELECT * FROM sales {wh} ORDER BY created_at DESC, id DESC LIMIT {page_limit} OFFSET {offset}",
+            f"SELECT s.*, COUNT(*) OVER() AS _total FROM sales s {wh} ORDER BY created_at DESC, id DESC LIMIT {page_limit} OFFSET {offset}",
             params or None,
         )
+        total = rows[0]["_total"] if rows else 0
+        for r in rows:
+            r.pop("_total", None)
 
         return {
             "items": _serialize_sales(rows),
@@ -833,7 +857,9 @@ def create_sale(payload: dict, _: dict = Depends(require_auth)):
                     "share_token": uuid.uuid4().hex,
                     "payment_status": payload.get("payment_status", "por_pagar"),
                     "payment_description": payload.get("payment_description"),
-                    "payment_date": payload.get("payment_date"),
+                    "payment_date": payload.get("payment_date") or (
+                        date.today().isoformat() if payload.get("payment_status") == "pagado" else None
+                    ),
                     "amount_paid": payload.get("amount_paid"),
                     "amount_pending": payload.get("amount_pending"),
                     "pending_payment_date": payload.get("pending_payment_date"),
@@ -915,6 +941,11 @@ def update_sale(sale_id: int, payload: dict, _: dict = Depends(require_auth)):
                     "amount_pending": payload.get("amount_pending"),
                     "pending_payment_date": payload.get("pending_payment_date"),
                 }
+                if not data["payment_date"]:
+                    if data["payment_status"] == "pagado":
+                        data["payment_date"] = existing.get("payment_date") or date.today().isoformat()
+                    else:
+                        data["payment_date"] = None
                 sets = ", ".join([f"{k} = %s" for k in data.keys()])
                 cur.execute(
                     f"UPDATE sales SET {sets} WHERE id = %s RETURNING *",
@@ -966,16 +997,25 @@ def update_sale_payment(sale_id: int, payload: dict, _: dict = Depends(require_a
         if status == existing["payment_status"]:
             return _serialize_sale(existing)
 
+        paid_date = payload.get("payment_date")
+        if paid_date is not None:
+            try:
+                from datetime import datetime as _dt
+                _dt.strptime(paid_date, "%Y-%m-%d")
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="payment_date debe tener formato YYYY-MM-DD")
+
         if status == "pagado":
             db.execute(
                 "UPDATE sales SET payment_status = 'pagado', amount_paid = %s, "
-                "amount_pending = 0, pending_payment_date = NULL WHERE id = %s",
-                (existing["total"], sale_id),
+                "amount_pending = 0, pending_payment_date = NULL, "
+                "payment_date = COALESCE(%s, CURRENT_DATE) WHERE id = %s",
+                (existing["total"], paid_date, sale_id),
                 returning=None,
             )
         else:
             db.execute(
-                "UPDATE sales SET payment_status = %s WHERE id = %s",
+                "UPDATE sales SET payment_status = %s, payment_date = NULL WHERE id = %s",
                 (status, sale_id),
                 returning=None,
             )
@@ -992,6 +1032,35 @@ def delete_sale(sale_id: int, _: dict = Depends(require_auth)):
         )
         and {"ok": True}
     )
+
+
+# ============================================================================
+# WHATSAPP (PDF/video adjuntos vía Cloud API)
+# ============================================================================
+
+class WhatsappSendRequest(BaseModel):
+    phone: str
+    media_url: str
+    filename: str | None = None
+    caption: str | None = None
+
+
+@app.get("/api/whatsapp/config")
+def whatsapp_config(_: dict = Depends(require_auth)):
+    return {"configured": whatsapp.is_configured()}
+
+
+@app.post("/api/whatsapp/send-media")
+def whatsapp_send_media(req: WhatsappSendRequest, request: Request, _: dict = Depends(require_auth)):
+    try:
+        url = req.media_url
+        if url.startswith("/"):
+            url = f"{str(request.base_url).rstrip('/')}{url}"
+        result = whatsapp.send_media(req.phone, url, caption=req.caption, filename=req.filename)
+        ids = result.get("messages") or []
+        return {"ok": True, "message_id": ids[0].get("id") if ids else None}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ============================================================================

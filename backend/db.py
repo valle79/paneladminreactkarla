@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 import time
 
 import psycopg2
@@ -16,6 +17,7 @@ DATABASE_URL = os.getenv(
 
 _pool = None
 _last_failed_at: float = 0.0
+_keepalive_thread = None
 
 
 def _build_pool():
@@ -28,7 +30,30 @@ def _build_pool():
             dsn=DATABASE_URL,
             cursor_factory=psycopg2.extras.RealDictCursor,
         )
+        _ensure_keepalive()
     return _pool
+
+
+def _ensure_keepalive():
+    global _keepalive_thread
+    if _keepalive_thread is None:
+        _keepalive_thread = threading.Thread(target=_ping_loop, daemon=True)
+        _keepalive_thread.start()
+
+
+def _ping_loop():
+    """Mantiene el compute de Neon despierto y la conexión del pool caliente."""
+    while True:
+        time.sleep(30)
+        try:
+            conn = get_conn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            finally:
+                close_conn(conn)
+        except Exception:
+            pass
 
 
 def get_conn():
@@ -65,11 +90,18 @@ def fetch_all(sql, params=None):
 
 
 def fetch_one(sql, params=None):
+    import time as _t
+    _t0 = _t.perf_counter()
     conn = get_conn()
+    _t1 = _t.perf_counter()
     try:
         with conn.cursor() as cur:
             cur.execute(sql, params)
-            return cur.fetchone()
+            _t2 = _t.perf_counter()
+            row = cur.fetchone()
+            _t3 = _t.perf_counter()
+        print(f"[db] getconn={(_t1-_t0)*1000:.0f}ms execute={(_t2-_t1)*1000:.0f}ms fetch={(_t3-_t2)*1000:.0f}ms", flush=True)
+        return row
     finally:
         close_conn(conn)
 

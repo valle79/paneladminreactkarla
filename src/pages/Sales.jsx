@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../components/Icon';
-import { api, errMsg } from '../api';
+import { api, errMsg, uploadFile } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
-import ProformaModal from '../components/Proforma';
+import ProformaModal, { ProformaDocument } from '../components/Proforma';
+import { buildDocumentPdfBlob } from '../components/DocPdf';
 import {
-  Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtMoney, fmtDateTime,
+  Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtMoney, fmtDateTime, fmtDate,
   StatusBadge, DocTypeBadge, InvoiceBadge,
 } from '../components/ui';
 import { Pagination } from '../components/Pagination';
@@ -60,8 +61,9 @@ const buildWhatsAppMessage = (s, link) => {
     `Estimado(a) ${clientName}:`,
     '',
     `Le comparto su *${formatDocNumber(s.invoice_type, s.invoice_number)}* por el importe de *${fmtMoney(s.total)}*.`,
-    'Puede revisarla o descargarla desde el siguiente enlace:',
-    link,
+    ...(link
+      ? ['Puede revisarla o descargarla desde el siguiente enlace:', link]
+      : ['Adjunto: su documento en PDF. Puede revisarlo al descargar el archivo.']),
     '',
     `Para el pago, puede depositar a nuestra cuenta en *${COMPANY.bank.name}*:`,
     `*${COMPANY.bank.account}* (${COMPANY.bank.type})`,
@@ -77,6 +79,10 @@ const buildWhatsAppMessage = (s, link) => {
   ].join('\n');
 };
 
+const WA_DOC_LABEL = { boleta: 'Boleta', factura: 'Factura', proforma: 'Proforma', cotizacion: 'Cotizacion' };
+const waDocName = (s) =>
+  `${WA_DOC_LABEL[s.invoice_type] || 'Documento'}-${String(s.invoice_number || '').padStart(7, '0')}`;
+
 export default function Sales() {
   const toast = useToast();
   const { ask, ConfirmDialog } = useConfirm();
@@ -89,6 +95,10 @@ export default function Sales() {
   const [cats, setCats] = useState(null);
   const [failed, setFailed] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [waSale, setWaSale] = useState(null);
+  const [waBusyId, setWaBusyId] = useState(null);
+  const [waConfigured, setWaConfigured] = useState(false);
+  const docRef = useRef(null);
   const [specIdx, setSpecIdx] = useState(null);
   const [specForm, setSpecForm] = useState({ description: '', specifications: [], features: [] });
   const [page, setPage] = useState(1);
@@ -109,6 +119,13 @@ export default function Sales() {
     api.get(`/sales?${params}`).then((r) => { setRows(r.data.items); setPagination(r.data.pagination); }).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
   useEffect(() => { load(); }, [page, dateFrom, dateTo]);
+
+  useEffect(() => {
+    let alive = true;
+    api.get('/whatsapp/config').then((r) => { if (alive) setWaConfigured(Boolean(r.data?.configured)); })
+      .catch(() => { if (alive) setWaConfigured(false); });
+    return () => { alive = false; };
+  }, []);
 
   const isProformaLike = form.invoice_type === 'proforma' || form.invoice_type === 'cotizacion';
 
@@ -441,13 +458,15 @@ export default function Sales() {
     const doc = `${s.invoice_type.toUpperCase()}-${String(s.invoice_number || '').padStart(7, '0')}`;
     const ok = await ask({
       title: 'Marcar como pagado',
-      message: `¿Confirmas que ${doc} ya fue pagada? El monto pendiente quedará en S/ 0.00.`,
+      message: `¿Confirmas que ${doc} ya fue pagada? Se registrará la fecha de pago de hoy y el monto pendiente quedará en S/ 0.00.`,
       confirmText: 'Sí, marcar pagada',
       confirmVariant: 'primary',
     });
     if (!ok) return;
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     try {
-      await api.patch(`/sales/${s.id}/payment`, { payment_status: 'pagado' });
+      await api.patch(`/sales/${s.id}/payment`, { payment_status: 'pagado', payment_date: today });
       toast.success(`${doc} marcada como pagada`);
       load();
     } catch (e) { toast.error(errMsg(e)); }
@@ -456,13 +475,50 @@ export default function Sales() {
   const sendWhatsApp = async (s) => {
     const phone = clientPhone(s);
     if (!phone) return toast.warning('El cliente no tiene teléfono/WhatsApp registrado');
+
+    if (!waConfigured) {
+      try {
+        const r = await api.post(`/sales/${s.id}/share-token`);
+        const link = `${window.location.origin}/doc/${s.id}/${r.data.share_token}`;
+        const msg = buildWhatsAppMessage(s, link);
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+      } catch (e) {
+        toast.error(errMsg(e));
+      }
+      return;
+    }
+
+    const fileName = `${waDocName(s)}.pdf`;
+
+    setWaSale({ ...s, advisor_name: s.advisor_name || s.advisor?.name });
+    setWaBusyId(s.id);
     try {
-      const r = await api.post(`/sales/${s.id}/share-token`);
-      const link = `${window.location.origin}/doc/${s.id}/${r.data.share_token}`;
-      const msg = buildWhatsAppMessage(s, link);
-      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await new Promise((r) => setTimeout(r, 60));
+      const rootEl = docRef.current;
+      if (!rootEl) throw new Error('No se pudo preparar el documento PDF');
+      const pdfBlob = await buildDocumentPdfBlob(
+        rootEl.querySelector('.proforma-main-page'),
+        rootEl.querySelector('.proforma-photos')
+      );
+      const url = await uploadFile(new File([pdfBlob], fileName, { type: 'application/pdf' }));
+      const msg = buildWhatsAppMessage(s, null);
+      await api.post('/whatsapp/send-media', { phone, media_url: url, filename: fileName, caption: msg });
+      toast.success('Documento enviado por WhatsApp con el PDF adjunto');
     } catch (e) {
-      toast.error(errMsg(e));
+      const err = errMsg(e);
+      try {
+        const r = await api.post(`/sales/${s.id}/share-token`);
+        const link = `${window.location.origin}/doc/${s.id}/${r.data.share_token}`;
+        const msg = buildWhatsAppMessage(s, link);
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+        toast.info(`No se pudo adjuntar el PDF (${err}); se abrió WhatsApp con el enlace del documento`);
+      } catch (e2) {
+        toast.error(errMsg(e2));
+      }
+    } finally {
+      setWaBusyId(null);
+      setWaSale(null);
     }
   };
 
@@ -643,14 +699,27 @@ export default function Sales() {
                   </td>
                   <td className="text-muted">{s.advisor?.name || '—'}</td>
                   <td className="money"><b>{fmtMoney(s.total)}</b></td>
-                  <td><StatusBadge value={s.payment_status} /></td>
+                  <td>
+                    <StatusBadge value={s.payment_status} />
+                    {s.payment_status === 'pagado' && s.payment_date ? (
+                      <div className="text-muted" style={{ fontSize: 11.5, marginTop: 3, whiteSpace: 'nowrap' }}>
+                        Cancelado: {fmtDate(s.payment_date)}
+                      </div>
+                    ) : s.payment_status === 'a_cuenta' && Number(s.amount_pending) > 0 ? (
+                      <div className="text-muted" style={{ fontSize: 11.5, marginTop: 3, whiteSpace: 'nowrap' }}>
+                        Saldo: {fmtMoney(s.amount_pending)}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="text-muted">{fmtDateTime(s.created_at)}</td>
                   <td>
                     <div className="row-actions">
                       <button className="btn-icon" onClick={() => setView(s)} title="Ver detalle"><Icon name="visible" size={14} /></button>
                       <button className="btn-icon" onClick={() => setPreview({ sale: s, payload: null })} title="Imprimir / PDF"><Icon name="print" size={14} /></button>
                       {clientPhone(s) && (
-                        <button className="btn-icon wa" onClick={() => sendWhatsApp(s)} title="Enviar por WhatsApp"><Icon name="whatsapp" size={14} /></button>
+                        <button className="btn-icon wa" onClick={() => sendWhatsApp(s)} disabled={waBusyId !== null} title="Enviar por WhatsApp (PDF adjunto)">
+                          {waBusyId === s.id ? <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} /> : <Icon name="whatsapp" size={14} />}
+                        </button>
                       )}
                       {s.payment_status !== 'pagado' && (
                         <button className="btn-icon pay" onClick={() => markPaid(s)} title="Marcar como pagado"><Icon name="checkmark" size={14} /></button>
@@ -884,6 +953,11 @@ export default function Sales() {
                   {' '}<DocTypeBadge type={view.invoice_type} />
                 </div>
                 <div className="text-muted" style={{ fontSize: 12.5, marginTop: 4 }}>Registrado: {fmtDateTime(view.created_at)}</div>
+                {view.payment_status === 'pagado' && view.payment_date && (
+                  <div className="text-muted" style={{ fontSize: 12.5, marginTop: 3, color: 'var(--g-dark)', fontWeight: 600 }}>
+                    <Icon name="checkmark" size={13} style={{ color: 'var(--g-dark)' }} /> Pagado: {fmtDate(view.payment_date)}
+                  </div>
+                )}
               </div>
               <StatusBadge value={view.payment_status} />
             </div>
@@ -1000,6 +1074,15 @@ export default function Sales() {
         sale={preview?.sale}
         onConfirm={preview?.payload ? confirmPreview : null}
       />
+
+      {waSale && (
+        <div
+          style={{ position: 'fixed', top: 0, left: -12000, width: 794, zIndex: -1, pointerEvents: 'none', background: '#fff' }}
+          aria-hidden="true"
+        >
+          <ProformaDocument ref={docRef} sale={waSale} />
+        </div>
+      )}
     </>
   );
 }

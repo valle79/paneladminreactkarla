@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '../components/Icon';
-import { api, errMsg } from '../api';
+import { api, assetUrl, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, Loader, EmptyState, ErrorState, ImageCell, PdfLink, fmtMoney, fmtDate } from '../components/ui';
@@ -29,6 +29,18 @@ export default function Products() {
   const [failed, setFailed] = useState(false);
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
+  const [waRow, setWaRow] = useState(null);
+  const [waPhone, setWaPhone] = useState('');
+  const [waMsg, setWaMsg] = useState('');
+  const [waBusy, setWaBusy] = useState(false);
+  const [waConfigured, setWaConfigured] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api.get('/whatsapp/config').then((r) => { if (alive) setWaConfigured(Boolean(r.data?.configured)); })
+      .catch(() => { if (alive) setWaConfigured(false); });
+    return () => { alive = false; };
+  }, []);
 
   const load = () => {
     setFailed(false);
@@ -107,6 +119,38 @@ export default function Products() {
     } catch (e) { toast.error(errMsg(e)); }
   };
 
+  const openWa = (r) => {
+    if (!r.pdf_url) return toast.warning('Este producto no tiene ficha PDF cargada');
+    setWaRow(r);
+    setWaPhone('');
+    setWaMsg(`Hola, te comparto la ficha técnica de ${r.name}.`);
+  };
+
+  const sendWa = async () => {
+    const phone = String(waPhone).replace(/\D/g, '');
+    if (!/^\d{9}$/.test(phone)) return toast.warning('Ingresa el teléfono del cliente (9 dígitos)');
+
+    if (!waConfigured) {
+      const link = assetUrl(waRow.pdf_url);
+      const msg = `${waMsg.trim()}\n\nDescarga la ficha técnica aquí:\n${link}`;
+      window.open(`https://wa.me/51${phone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+      setWaRow(null);
+      return;
+    }
+
+    setWaBusy(true);
+    try {
+      await api.post('/whatsapp/send-media', {
+        phone,
+        media_url: waRow.pdf_url,
+        filename: `${waRow.name}.pdf`.replace(/\s+/g, '-'),
+        caption: waMsg.trim(),
+      });
+      toast.success('Ficha técnica enviada por WhatsApp');
+      setWaRow(null);
+    } catch (e) { toast.error(errMsg(e)); } finally { setWaBusy(false); }
+  };
+
   if (!data) return failed ? <ErrorState onRetry={load} message="No se pudieron cargar los productos" /> : <Loader text="Cargando productos..." />;
 
   const specs = form.specifications;
@@ -158,6 +202,7 @@ export default function Products() {
                     <td className="text-muted">{fmtDate(r.created_at)}</td>
                     <td>
                       <div className="row-actions">
+                        <button className="btn-icon wa" onClick={() => openWa(r)} title="Enviar ficha PDF por WhatsApp"><Icon name="whatsapp" size={14} /></button>
 <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
             <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
                       </div>
@@ -254,6 +299,42 @@ export default function Products() {
             <label>Imagen del producto</label>
             <FileUpload value={form.image_url} onChange={(u) => setForm({ ...form, image_url: u })} />
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!waRow}
+        onClose={() => setWaRow(null)}
+        title={`Enviar ficha de "${waRow?.name || ''}"`}
+        icon={<Icon name="whatsapp" size={18} />}
+        size="sm"
+        footer={
+          <>
+            <button className="btn btn-ghost" onClick={() => setWaRow(null)}><Icon name="x" size={15} /> Cancelar</button>
+            <button className="btn btn-primary" onClick={sendWa} disabled={waBusy}>
+              {waBusy ? <span className="spinner" /> : <Icon name="whatsapp" size={15} />} Enviar por WhatsApp
+            </button>
+          </>
+        }
+      >
+        <div className="field">
+          <label>Teléfono del cliente <span className="req">*</span></label>
+          <input
+            className="input"
+            maxLength={9}
+            placeholder="Ej. 987654321"
+            value={waPhone}
+            onChange={(e) => setWaPhone(e.target.value.replace(/\D/g, ''))}
+          />
+        </div>
+        <div className="field">
+          <label>Mensaje junto al PDF</label>
+          <textarea className="textarea" rows={4} value={waMsg} onChange={(e) => setWaMsg(e.target.value)} />
+        </div>
+        <div className="hint">
+          {waConfigured
+            ? 'El cliente recibirá el PDF adjunto + el mensaje (sin enlaces visibles). Debe haberle escrito a su WhatsApp en las últimas 24 h para poder recibir el archivo.'
+            : 'Se abrirá WhatsApp con su mensaje más el enlace del PDF alojado en la nube (configura la API de WhatsApp en backend/.env para enviarlo como archivo adjunto).'}
         </div>
       </Modal>
 

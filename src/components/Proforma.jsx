@@ -33,6 +33,9 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
     ? String(sale.fecha).slice(0, 10).split('-').reverse().join('/')
     : now.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const horaDoc = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const fechaPago = sale.payment_date
+    ? String(sale.payment_date).slice(0, 10).split('-').reverse().join('/')
+    : null;
 
   const sub = Number(sale.subtotal || 0);
   const igv = Number(sale.igv || 0);
@@ -88,6 +91,11 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
           <div className="proforma-doc-date">
             FECHA: <b>{fechaDoc}</b>
             <span className="proforma-doc-time">HORA: <b>{horaDoc}</b></span>
+            {sale.payment_status === 'pagado' && fechaPago && (
+              <span className="proforma-doc-time" style={{ color: '#1d7a33', fontWeight: 700 }}>
+                PAGADO EL: <b>{fechaPago}</b>
+              </span>
+            )}
           </div>
         </div>
 

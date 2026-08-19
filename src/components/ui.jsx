@@ -168,8 +168,12 @@ export function fmtMoney(n) {
 
 export function fmtDate(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d)) return String(iso);
+  const s = String(iso).trim();
+  if (!s) return '—';
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(s)
+    ? new Date(`${s}T12:00:00`)
+    : new Date(iso);
+  if (isNaN(d)) return s;
   return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
