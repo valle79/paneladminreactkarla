@@ -126,17 +126,17 @@ export default function SpareParts() {
                 const specs = parseJson(r.specifications, []);
                 return (
                   <tr key={r.id}>
-                    <td><ImageCell src={r.image_url} /></td>
-                    <td>
+                    <td data-label="Imagen"><ImageCell src={r.image_url} /></td>
+                    <td data-label="Repuesto">
                       <div className="cell-title">{r.name}</div>
                       <div className="desc-cell">{r.description || ''}</div>
                     </td>
-                    <td style={{ maxWidth: 300 }}>
+                    <td data-label="Especificaciones" style={{ maxWidth: 300 }}>
                       {specs.slice(0, 2).map((s, i) => <span className="chip" key={i}>{s.label}: {s.value}</span>)}
                     </td>
-                    <td className="money"><b>{fmtMoney(r.price)}</b></td>
-                    <td><PdfLink url={r.pdf_url} label="PDF" /></td>
-                    <td className="text-muted">{fmtDate(r.created_at)}</td>
+                    <td data-label="Precio" className="money"><b>{fmtMoney(r.price)}</b></td>
+                    <td data-label="Ficha"><PdfLink url={r.pdf_url} label="PDF" /></td>
+                    <td data-label="Registro" className="text-muted">{fmtDate(r.created_at)}</td>
                     <td>
                       <div className="row-actions">
 <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>

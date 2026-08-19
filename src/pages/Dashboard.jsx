@@ -66,7 +66,7 @@ export default function Dashboard() {
       <div className="dash-grid">
         <div className="dash-card">
           <h3><Icon name="bar-chart" size={17} style={{ color: 'var(--g-dark)' }} /> Ventas de los últimos meses</h3>
-          <div style={{ width: '100%', height: 260 }}>
+          <div className="chart-box">
             <ResponsiveContainer>
               <AreaChart data={chart} margin={{ top: 6, right: 6, left: -8, bottom: 0 }}>
                 <defs>
@@ -115,13 +115,13 @@ export default function Dashboard() {
             <tbody>
               {(data.recent || []).map((s) => (
                 <tr key={s.id}>
-                  <td>
+                  <td data-label="Documento">
                     <InvoiceBadge type={s.invoice_type} number={s.invoice_number} />
                     {' '}<DocTypeBadge type={s.invoice_type} />
                   </td>
-                  <td className="text-muted">—</td>
-                  <td className="money"><b>{fmtMoney(s.total)}</b></td>
-                  <td>
+                  <td data-label="Cliente" className="text-muted">—</td>
+                  <td data-label="Total" className="money"><b>{fmtMoney(s.total)}</b></td>
+                  <td data-label="Estado de pago">
                     <StatusBadge value={s.payment_status} />
                     {s.payment_status === 'pagado' && s.payment_date && (
                       <div className="text-muted" style={{ fontSize: 11.5, marginTop: 3, whiteSpace: 'nowrap' }}>
@@ -129,7 +129,7 @@ export default function Dashboard() {
                       </div>
                     )}
                   </td>
-                  <td className="text-muted">{fmtDateTime(s.created_at)}</td>
+                  <td data-label="Fecha" className="text-muted">{fmtDateTime(s.created_at)}</td>
                 </tr>
               ))}
               {!data.recent?.length && (

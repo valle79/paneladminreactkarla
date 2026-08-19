@@ -120,22 +120,22 @@ export default function Advisors() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id}>
-                  <td>
+                  <td data-label="Asesor">
                     <div className="flex">
                       <AvatarCell src={r.image_url} name={r.name} />
                       <div><div className="cell-title">{r.name}</div><div style={{ fontSize: 11.5, color: 'var(--faint)' }}></div></div>
                     </div>
                   </td>
-                  <td><span className="chip">{r.position || '—'}</span></td>
-                  <td>
+                  <td data-label="Cargo"><span className="chip">{r.position || '—'}</span></td>
+                  <td data-label="WhatsApp">
                     <span className="flex" style={{ color: '#1eaa47', fontWeight: 600, fontSize: 13 }}>
                       <Icon name="phone" size={13} /> {r.whatsapp || '—'}
                     </span>
                   </td>
-                  <td style={{ maxWidth: 260 }}>
+                  <td data-label="Especialidades" style={{ maxWidth: 260 }}>
                     {parseSpecialties(r.specialties).map((s) => <span className="chip" key={s}>{s}</span>)}
                   </td>
-                  <td className="text-muted">{fmtDate(r.created_at)}</td>
+                  <td data-label="Registro" className="text-muted">{fmtDate(r.created_at)}</td>
                   <td>
                     <div className="row-actions">
 <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>

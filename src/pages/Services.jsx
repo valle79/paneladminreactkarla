@@ -90,14 +90,14 @@ export default function Services() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id}>
-                  <td>
+                  <td data-label="Servicio">
                     <div className="flex">
                       <span className="thumb-wrap" style={{ width: 38, height: 38 }}><Icon name="money-bag" size={17} /></span>
                       <span className="cell-title">{r.name}</span>
                     </div>
                   </td>
-                  <td className="money"><b>{fmtMoney(r.price)}</b></td>
-                  <td className="text-muted">{r.id}</td>
+                  <td data-label="Precio" className="money"><b>{fmtMoney(r.price)}</b></td>
+                  <td data-label="ID" className="text-muted">{r.id}</td>
                   <td>
                     <div className="row-actions">
 <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>

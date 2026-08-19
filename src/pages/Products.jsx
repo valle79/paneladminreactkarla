@@ -188,18 +188,18 @@ export default function Products() {
                 const d = parseJson(r.dimensions, {});
                 return (
                   <tr key={r.id}>
-                    <td><ImageCell src={r.image_url} /></td>
-                    <td>
+                    <td data-label="Imagen"><ImageCell src={r.image_url} /></td>
+                    <td data-label="Producto">
                       <div className="cell-title">{r.name}</div>
                       <div className="desc-cell">{r.description || ''}</div>
                     </td>
-                    <td className="money"><b>{fmtMoney(r.price)}</b></td>
-                    <td className="text-muted" style={{ fontSize: 12.5 }}>
+                    <td data-label="Precio" className="money"><b>{fmtMoney(r.price)}</b></td>
+                    <td data-label="Dimensiones" className="text-muted" style={{ fontSize: 12.5 }}>
                       {d.width ? `${d.width}×${d.height}×${d.depth} cm` : '—'}
                       {d.weight ? <div>Peso: {d.weight} kg</div> : null}
                     </td>
-                    <td><PdfLink url={r.pdf_url} /></td>
-                    <td className="text-muted">{fmtDate(r.created_at)}</td>
+                    <td data-label="Ficha PDF"><PdfLink url={r.pdf_url} /></td>
+                    <td data-label="Registro" className="text-muted">{fmtDate(r.created_at)}</td>
                     <td>
                       <div className="row-actions">
                         <button className="btn-icon wa" onClick={() => openWa(r)} title="Enviar ficha PDF por WhatsApp"><Icon name="whatsapp" size={14} /></button>

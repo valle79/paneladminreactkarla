@@ -682,11 +682,11 @@ export default function Sales() {
             <tbody>
               {filtered.map((s) => (
                 <tr key={s.id}>
-                  <td>
+                  <td data-label="Documento">
                     <InvoiceBadge type={s.invoice_type} number={s.invoice_number} />
                     <div style={{ marginTop: 3 }}><DocTypeBadge type={s.invoice_type} /></div>
                   </td>
-                  <td style={{ maxWidth: 240 }}>
+                  <td data-label="Cliente" style={{ maxWidth: 240 }}>
                     <div className="cell-title">{s.client ? (s.client.names ? `${s.client.names} ${s.client.last_names || ''}` : s.client.razonsocial) : '—'}</div>
                     <div className="text-muted" style={{ fontSize: 12 }}>
                       {s.client ? (s.client.dni ? `DNI ${s.client.dni}` : s.client.ruc ? `RUC ${s.client.ruc}` : '') : '—'}
@@ -697,9 +697,9 @@ export default function Sales() {
                       </div>
                     )}
                   </td>
-                  <td className="text-muted">{s.advisor?.name || '—'}</td>
-                  <td className="money"><b>{fmtMoney(s.total)}</b></td>
-                  <td>
+                  <td data-label="Asesor" className="text-muted">{s.advisor?.name || '—'}</td>
+                  <td data-label="Total" className="money"><b>{fmtMoney(s.total)}</b></td>
+                  <td data-label="Pago">
                     <StatusBadge value={s.payment_status} />
                     {s.payment_status === 'pagado' && s.payment_date ? (
                       <div className="text-muted" style={{ fontSize: 11.5, marginTop: 3, whiteSpace: 'nowrap' }}>
@@ -711,7 +711,7 @@ export default function Sales() {
                       </div>
                     ) : null}
                   </td>
-                  <td className="text-muted">{fmtDateTime(s.created_at)}</td>
+                  <td data-label="Fecha" className="text-muted">{fmtDateTime(s.created_at)}</td>
                   <td>
                     <div className="row-actions">
                       <button className="btn-icon" onClick={() => setView(s)} title="Ver detalle"><Icon name="visible" size={14} /></button>
@@ -988,17 +988,17 @@ export default function Sales() {
                 <tbody>
                   {(view.items || []).map((i, idx) => (
                     <tr key={idx}>
-                      <td className="cell-title">{i.name || i.manual_name || 'Item'}
+                      <td data-label="Item" className="cell-title">{i.name || i.manual_name || 'Item'}
                         {i.manual_description && <div className="text-muted" style={{ fontSize: 12 }}>{i.manual_description}</div>}
                       </td>
-                      <td>
+                      <td data-label="Tipo">
                         <span className="chip">
                           {{ machine: 'Producto', repuesto: 'Repuesto', service: 'Servicio', manual: 'Manual' }[i.item_type] || i.item_type}
                         </span>
                       </td>
-                      <td>{i.quantity}</td>
-                      <td className="money">{fmtMoney(i.unit_price)}</td>
-                      <td className="money"><b>{fmtMoney(i.quantity * i.unit_price)}</b></td>
+                      <td data-label="Cant.">{i.quantity}</td>
+                      <td data-label="P. Unit." className="money">{fmtMoney(i.unit_price)}</td>
+                      <td data-label="Subtotal" className="money"><b>{fmtMoney(i.quantity * i.unit_price)}</b></td>
                     </tr>
                   ))}
                 </tbody>

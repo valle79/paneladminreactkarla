@@ -113,7 +113,7 @@ export default function Promotions() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id}>
-                  <td>
+                  <td data-label="Imagen">
                     {r.image_url ? (
                       r.media_type === 'video' ? (
                         <div className="thumb-wrap" style={{ position: 'relative' }}><Icon name="price-tag" size={20} /></div>
@@ -122,22 +122,22 @@ export default function Promotions() {
                       )
                     ) : <span className="thumb-wrap"><Icon name="price-tag" size={18} /></span>}
                   </td>
-                  <td style={{ maxWidth: 320 }}>
+                  <td data-label="Promoción" style={{ maxWidth: 320 }}>
                     <div className="cell-title">{r.title}</div>
                     <div className="desc-cell">{r.subtitle || ''}</div>
                   </td>
-                  <td className="text-muted">{r.valid_until}</td>
-                  <td>
+                  <td data-label="Vigencia" className="text-muted">{r.valid_until}</td>
+                  <td data-label="Estado">
                     <button className="btn btn-sm btn-ghost" style={{ padding: 0 }} onClick={() => toggle(r, 'is_active')} title="Cambiar estado">
                       {r.is_active ? <Badge kind="green">Activa</Badge> : <Badge kind="gray">Inactiva</Badge>}
                     </button>
                   </td>
-                  <td>
+                  <td data-label="Visibilidad web">
                     <button className="btn btn-sm btn-ghost" style={{ padding: 0 }} onClick={() => toggle(r, 'show_in_web')} title="Cambiar visibilidad">
                       {r.show_in_web ? <Badge kind="yellow"><Icon name="globe" size={11} /> Visible</Badge> : <Badge kind="gray"><Icon name="hide" size={11} /> Oculta</Badge>}
                     </button>
                   </td>
-                  <td><span className="chip"><Icon name="sort" size={12} /> {r.display_order}</span></td>
+                  <td data-label="Orden"><span className="chip"><Icon name="sort" size={12} /> {r.display_order}</span></td>
                   <td>
                     <div className="row-actions">
 <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>

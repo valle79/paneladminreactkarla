@@ -124,10 +124,10 @@ function DniTab() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id} style={r.deleted ? { opacity: 0.55 } : {}}>
-                  <td><span className="chip">{r.dni}</span></td>
-                  <td><span className="cell-title">{r.names} {r.last_names}</span></td>
-                  <td className="desc-cell">{r.address || '—'}</td>
-                  <td className="text-muted">{fmtDate(r.created_at)}</td>
+                  <td data-label="DNI"><span className="chip">{r.dni}</span></td>
+                  <td data-label="Nombres y apellidos"><span className="cell-title">{r.names} {r.last_names}</span></td>
+                  <td data-label="Dirección" className="desc-cell">{r.address || '—'}</td>
+                  <td data-label="Registro" className="text-muted">{fmtDate(r.created_at)}</td>
                   <td>
                     <div className="row-actions">
                       {r.deleted ? (
@@ -341,15 +341,15 @@ function RucTab() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id} style={r.deleted ? { opacity: 0.55 } : {}}>
-                  <td><span className="chip">{r.ruc}</span></td>
-                  <td><span className="cell-title">{r.razonsocial}</span></td>
-                  <td className="text-muted">{r.nombrecomercial || '—'}</td>
-                  <td>
+                  <td data-label="RUC"><span className="chip">{r.ruc}</span></td>
+                  <td data-label="Razón social"><span className="cell-title">{r.razonsocial}</span></td>
+                  <td data-label="Nombre comercial" className="text-muted">{r.nombrecomercial || '—'}</td>
+                  <td data-label="Teléfonos">
                     <span className="flex" style={{ color: '#1eaa47', fontSize: 12.5 }}>
                       <Icon name="phone" size={12} /> {(Array.isArray(r.telefonos) ? r.telefonos.join(', ') : r.telefonos) || '—'}
                     </span>
                   </td>
-                  <td className="text-muted" style={{ fontSize: 12.5 }}>{[r.departamento, r.provincia, r.distrito].filter(Boolean).join(' · ') || '—'}</td>
+                  <td data-label="Ubicación" className="text-muted" style={{ fontSize: 12.5 }}>{[r.departamento, r.provincia, r.distrito].filter(Boolean).join(' · ') || '—'}</td>
                   <td>
                     <div className="row-actions">
                       {r.deleted ? (

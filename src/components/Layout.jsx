@@ -85,8 +85,12 @@ export default function Layout({ children }) {
 
       <div className="main">
         <header className="topbar">
-          <button className="btn-icon menu-btn" onClick={() => setOpen(true)}>
-            <Icon name="menu" size={18} />
+          <button className="btn-icon menu-btn" onClick={() => setOpen(true)} title="Abrir menú" aria-label="Abrir menú">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" style={{ display: 'block' }}>
+              <path d="M3.5 6.5h17" />
+              <path d="M6.5 12h11" />
+              <path d="M5.5 17.5h13" />
+            </svg>
           </button>
           <div className="crumb">
             <b>{title}</b>
