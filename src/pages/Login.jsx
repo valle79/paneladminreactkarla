@@ -41,7 +41,17 @@ export default function Login() {
         <img src={IMG} onError={(e) => { e.target.src = IMG_FALLBACK; }} alt="Campo agrícola" />
         <div className="login-media-veil" />
         <div className="login-media-content">
-
+          <span className="login-media-bar" />
+          <h2>El respaldo que su <b>campo</b> necesita</h2>
+          <p>
+            Fabricaciones y servicios agrícolas que impulsan su producción,
+            con repuestos originales y asesoría técnica especializada.
+          </p>
+          <div className="login-media-chips">
+            {FEATURES.map((f) => (
+              <span key={f}>{f}</span>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -64,6 +74,15 @@ export default function Login() {
               <Icon name="high-priority" size={16} /> {error}
             </div>
           )}
+
+          <div className="login-badges">
+            <span>
+              <Icon name="security-checked" size={13} /> Acceso seguro
+            </span>
+            <span>
+              <Icon name="user-male-circle" size={13} /> Solo personal autorizado
+            </span>
+          </div>
 
           <form onSubmit={submit}>
             <div className="field">

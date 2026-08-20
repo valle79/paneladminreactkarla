@@ -3,7 +3,7 @@ import Icon from '../components/Icon';
 import { api, assetUrl, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
-import { Toolbar, useSearch, Loader, EmptyState, ErrorState, ImageCell, PdfLink, fmtMoney, fmtDate } from '../components/ui';
+import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, ImageCell, PdfLink, fmtMoney, fmtDate } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
 import { Pagination } from '../components/Pagination';
 
@@ -56,6 +56,7 @@ export default function Products() {
   const pagination = data?.pagination;
 
   const { q, setQ, filtered } = useSearch(rows, [(r) => r.name, (r) => r.description]);
+  const reloadList = useListReload(page, setPage, load, editingId);
 
   const openAdd = () => { setEditingId(null); setForm(empty); setModal(true); };
   const openEdit = (r) => {
@@ -105,7 +106,7 @@ export default function Products() {
         toast.success('Producto creado');
       }
       setModal(false);
-      load();
+      reloadList();
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
 

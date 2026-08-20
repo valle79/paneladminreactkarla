@@ -3,7 +3,7 @@ import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
-import { Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtMoney } from '../components/ui';
+import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, fmtMoney } from '../components/ui';
 import { Pagination } from '../components/Pagination';
 
 const empty = { name: '', price: '' };
@@ -29,6 +29,7 @@ export default function Services() {
   useEffect(() => { load(); }, [page]);
 
   const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.name]);
+  const reloadList = useListReload(page, setPage, load, editingId);
 
   const openAdd = () => { setEditingId(null); setForm(empty); setModal(true); };
   const openEdit = (r) => { setEditingId(r.id); setForm({ name: r.name, price: r.price }); setModal(true); };
@@ -47,7 +48,7 @@ export default function Services() {
         toast.success('Servicio creado');
       }
       setModal(false);
-      load();
+      reloadList();
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
 
@@ -83,7 +84,6 @@ export default function Services() {
               <tr>
                 <th>Servicio</th>
                 <th>Precio</th>
-                <th>ID</th>
                 <th style={{ textAlign: 'right' }}>Acciones</th>
               </tr>
             </thead>
@@ -97,7 +97,6 @@ export default function Services() {
                     </div>
                   </td>
                   <td data-label="Precio" className="money"><b>{fmtMoney(r.price)}</b></td>
-                  <td data-label="ID" className="text-muted">{r.id}</td>
                   <td>
                     <div className="row-actions">
 <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>

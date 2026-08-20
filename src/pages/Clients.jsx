@@ -3,7 +3,7 @@ import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
-import { Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtDate } from '../components/ui';
+import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, fmtDate } from '../components/ui';
 import { Pagination } from '../components/Pagination';
 
 const emptyDni = { dni: '', names: '', last_names: '', address: '', phone: '' };
@@ -46,6 +46,7 @@ function DniTab() {
   const pagination = data?.pagination;
 
   const { q, setQ, filtered } = useSearch(rows, [(r) => r.names, (r) => r.last_names, (r) => r.dni]);
+  const reloadList = useListReload(page, setPage, load, editingId);
 
   const openAdd = () => { setEditingId(null); setForm(emptyDni); setSource(''); setModal(true); };
   const openEdit = (r) => { setEditingId(r.id); setForm({ dni: r.dni, names: r.names, last_names: r.last_names, address: r.address, phone: r.phone || '' }); setSource(''); setModal(true); };
@@ -80,7 +81,7 @@ function DniTab() {
         toast.success('Cliente creado');
       }
       setModal(false);
-      load();
+      reloadList();
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
 
@@ -224,6 +225,7 @@ function RucTab() {
   const pagination = data?.pagination;
 
   const { q, setQ, filtered } = useSearch(rows, [(r) => r.razonsocial, (r) => r.ruc, (r) => r.nombrecomercial]);
+  const reloadList = useListReload(page, setPage, load, editingId);
 
   const openAdd = () => { setEditingId(null); setForm(emptyRuc); setSource(''); setModal(true); };
   const openEdit = (r) => {
@@ -297,7 +299,7 @@ function RucTab() {
         toast.success('Empresa creada');
       }
       setModal(false);
-      load();
+      reloadList();
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
 

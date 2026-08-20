@@ -3,7 +3,7 @@ import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
-import { Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtDate, Badge } from '../components/ui';
+import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, fmtDate, Badge } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
 import { Pagination } from '../components/Pagination';
 
@@ -34,6 +34,7 @@ export default function Promotions() {
   useEffect(() => { load(); }, [page]);
 
   const { q, setQ, filtered } = useSearch(rows || [], [(r) => r.title, (r) => r.subtitle, (r) => r.valid_until]);
+  const reloadList = useListReload(page, setPage, load, editingId);
 
   const openAdd = () => { setEditingId(null); setForm(empty); setModal(true); };
   const openEdit = (r) => {
@@ -67,7 +68,7 @@ export default function Promotions() {
         toast.success('Promoción creada');
       }
       setModal(false);
-      load();
+      reloadList();
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
 

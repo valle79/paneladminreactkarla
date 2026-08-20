@@ -6,7 +6,7 @@ import { Modal, useConfirm } from '../components/Modal';
 import ProformaModal, { ProformaDocument } from '../components/Proforma';
 import { buildDocumentPdfBlob } from '../components/DocPdf';
 import {
-  Toolbar, useSearch, Loader, EmptyState, ErrorState, fmtMoney, fmtDateTime, fmtDate,
+  Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, fmtMoney, fmtDateTime, fmtDate,
   StatusBadge, DocTypeBadge, InvoiceBadge,
 } from '../components/ui';
 import { Pagination } from '../components/Pagination';
@@ -119,6 +119,8 @@ export default function Sales() {
     api.get(`/sales?${params}`).then((r) => { setRows(r.data.items); setPagination(r.data.pagination); }).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
   useEffect(() => { load(); }, [page, dateFrom, dateTo]);
+
+  const reloadList = useListReload(page, setPage, load, editingId);
 
   useEffect(() => {
     let alive = true;
@@ -233,7 +235,7 @@ export default function Sales() {
       }
       setPreview(null);
       setModal(false);
-      load();
+      reloadList();
     } catch (e) {
       toast.error(errMsg(e));
       throw e;
@@ -432,7 +434,7 @@ export default function Sales() {
         toast.success('Venta registrada correctamente');
       }
       setModal(false);
-      load();
+      reloadList();
     } catch (e) {
       toast.error(errMsg(e));
     } finally {

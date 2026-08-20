@@ -207,7 +207,7 @@ class SoftDeleteMixin:
         offset = (page - 1) * limit
         
         rows = db.fetch_all(
-            f"SELECT * FROM {self.table} {wh} ORDER BY id LIMIT {limit} OFFSET {offset}"
+            f"SELECT * FROM {self.table} {wh} ORDER BY id DESC LIMIT {limit} OFFSET {offset}"
         )
         
         items = [self.hydrate(dict(r)) for r in rows]

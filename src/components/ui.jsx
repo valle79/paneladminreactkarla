@@ -1,5 +1,5 @@
 import Icon from './Icon';
-import { useMemo, useState } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import { assetUrl } from '../api';
 
 export function Loader({ text = 'Cargando...' }) {
@@ -79,6 +79,13 @@ export function useSearch(data, keys) {
     );
   }, [data, q, keys]);
   return { q, setQ, filtered };
+}
+
+export function useListReload(page, setPage, load, editingId) {
+  return useCallback(() => {
+    if (!editingId && page !== 1) setPage(1);
+    else load();
+  }, [page, setPage, load, editingId]);
 }
 
 export function ImageCell({ src, alt = 'imagen', width = 58 }) {
