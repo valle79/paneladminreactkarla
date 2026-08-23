@@ -1020,7 +1020,14 @@ table.data tbody tr:last-child td { border-bottom: none; }
   .proforma-totals,
   .proforma-letter,
   .proforma-footer { page-break-inside: avoid; break-inside: avoid; }
-  .proforma-head { page-break-inside: avoid; }
+  .proforma-head {
+    page-break-inside: avoid;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+  .proforma-doc { text-align: right !important; align-self: flex-end !important; }
   .proforma-photos {
     page-break-before: always !important;
     break-before: page !important;
@@ -1363,7 +1370,7 @@ button { touch-action: manipulation; }
 }
 
 /* ---------- Documento imprimible / vista WhatsApp ---------- */
-@media (max-width: 720px) {
+@media screen and (max-width: 720px) {
   .docview-stage { padding: 14px 8px 28px; }
   .proforma-preview { padding: 10px; }
   .proforma-head { flex-direction: column; align-items: flex-start; padding: 12px 14px 8px; }
