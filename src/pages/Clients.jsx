@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, fmtDate } from '../components/ui';
 import { Pagination } from '../components/Pagination';
+import { useAuth } from '../auth';
 
 const emptyDni = { dni: '', names: '', last_names: '', address: '', phone: '' };
 const emptyRuc = {
@@ -18,6 +19,7 @@ const emptyRuc = {
 
 function DniTab() {
   const toast = useToast();
+  const { can } = useAuth();
   const { ask, ConfirmDialog } = useConfirm();
   const [data, setData] = useState(null);
   const [modal, setModal] = useState(false);
@@ -113,7 +115,7 @@ function DniTab() {
       <div className="card">
         <Toolbar search={q} onSearch={setQ} placeholder="Buscar por DNI o nombre...">
           <span className="pill-count">{pagination?.total || 0} clientes</span>
-          <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={16} /> Agregar Cliente</button>
+          {can('CLIENTS_CREATE') && <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={16} /> Agregar Cliente</button>}
         </Toolbar>
         <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--line)', borderRadius: 0 }}>
           <table className="data">
@@ -135,8 +137,8 @@ function DniTab() {
                         <button className="btn-icon" onClick={() => restore(r)} title="Restaurar"><Icon name="undo" size={14} /></button>
                       ) : (
                         <>
-<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
-            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
+                          {can('CLIENTS_UPDATE') && <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>}
+                          {can('CLIENTS_DELETE') && <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>}
                         </>
                       )}
                     </div>
@@ -197,6 +199,7 @@ function DniTab() {
 
 function RucTab() {
   const toast = useToast();
+  const { can } = useAuth();
   const { ask, ConfirmDialog } = useConfirm();
   const [data, setData] = useState(null);
   const [modal, setModal] = useState(false);
@@ -331,7 +334,7 @@ function RucTab() {
       <div className="card">
         <Toolbar search={q} onSearch={setQ} placeholder="Buscar por RUC o razón social...">
           <span className="pill-count">{pagination?.total || 0} empresas</span>
-          <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={16} /> Agregar Empresa</button>
+          {can('CLIENTS_CREATE') && <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={16} /> Agregar Empresa</button>}
         </Toolbar>
         <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--line)', borderRadius: 0 }}>
           <table className="data">
@@ -358,8 +361,8 @@ function RucTab() {
                         <button className="btn-icon" onClick={() => restore(r)} title="Restaurar"><Icon name="undo" size={14} /></button>
                       ) : (
                         <>
-<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
-            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
+                          {can('CLIENTS_UPDATE') && <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>}
+                          {can('CLIENTS_DELETE') && <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>}
                         </>
                       )}
                     </div>

@@ -18,6 +18,7 @@ export default function Login() {
   const { login } = useAuth();
   const toast = useToast();
 
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -35,7 +36,7 @@ export default function Login() {
     setBusy(true);
 
     try {
-      await login(password);
+      await login({ email: email.trim(), password });
 
       toast.success('Bienvenido al panel administrativo');
     } catch (err) {
@@ -114,7 +115,7 @@ export default function Login() {
           </h2>
 
           <p className="login-sub">
-            Ingresa la contraseña para acceder al sistema.
+            Ingresa tu email y contraseña para acceder al sistema.
           </p>
 
           {/* =================================================
@@ -156,6 +157,39 @@ export default function Login() {
               FORMULARIO
           ================================================== */}
           <form onSubmit={submit}>
+
+            {/* =================================================
+                EMAIL (USUARIO)
+            ================================================== */}
+            <div className="field">
+              <label htmlFor="email">
+                Email del usuario
+              </label>
+
+              <div className="input-icon">
+                <Icon
+                  name="user-male"
+                  size={16}
+                />
+
+                <input
+                  id="email"
+                  className="input"
+                  type="email"
+                  placeholder="usuario@iqueno.sac"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+
+                    if (error) {
+                      setError('');
+                    }
+                  }}
+                  autoComplete="username"
+                  disabled={busy}
+                />
+              </div>
+            </div>
 
             {/* =================================================
                 CONTRASEÑA

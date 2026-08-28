@@ -11,6 +11,7 @@ import {
 } from '../components/ui';
 import { Pagination } from '../components/Pagination';
 import { COMPANY, formatDocNumber } from '../config';
+import { useAuth } from '../auth';
 
 const emptySale = {
   client_type: 'dni',
@@ -85,6 +86,7 @@ const waDocName = (s) =>
 
 export default function Sales() {
   const toast = useToast();
+  const { can } = useAuth();
   const { ask, ConfirmDialog } = useConfirm();
   const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(false);
@@ -635,7 +637,7 @@ export default function Sales() {
           <h1>Ventas</h1>
           <div className="sub">Boletas, facturas, proformas y cotizaciones</div>
         </div>
-        <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Nueva Venta</button>
+        {can('SALES_CREATE') && <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Nueva Venta</button>}
       </div>
 
       <div className="card">
@@ -723,11 +725,11 @@ export default function Sales() {
                           {waBusyId === s.id ? <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} /> : <Icon name="whatsapp" size={14} />}
                         </button>
                       )}
-                      {s.payment_status !== 'pagado' && (
+                      {s.payment_status !== 'pagado' && can('SALES_UPDATE') && (
                         <button className="btn-icon pay" onClick={() => markPaid(s)} title="Marcar como pagado"><Icon name="checkmark" size={14} /></button>
                       )}
-                      <button className="btn-icon" onClick={() => openEdit(s)} title="Editar"><Icon name="edit" size={14} /></button>
-                      <button className="btn-icon danger" onClick={() => remove(s)} title="Anular"><Icon name="trash" size={14} /></button>
+                      {can('SALES_UPDATE') && <button className="btn-icon" onClick={() => openEdit(s)} title="Editar"><Icon name="edit" size={14} /></button>}
+                      {can('SALES_DELETE') && <button className="btn-icon danger" onClick={() => remove(s)} title="Anular"><Icon name="trash" size={14} /></button>}
                     </div>
                   </td>
                 </tr>

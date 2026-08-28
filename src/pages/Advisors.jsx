@@ -6,6 +6,7 @@ import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, AvatarCell, fmtDate } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
 import { Pagination } from '../components/Pagination';
+import { useAuth } from '../auth';
 
 const SPECIALTIES = ['Maquinaria', 'Tractores', 'Agricultura', 'Proyectos Especiales', 'Servicio al Cliente', 'Administracion', 'Ventas', 'Otros'];
 
@@ -18,6 +19,7 @@ function parseSpecialties(v) {
 
 export default function Advisors() {
   const toast = useToast();
+  const { can } = useAuth();
   const { ask, ConfirmDialog } = useConfirm();
   const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(false);
@@ -99,7 +101,7 @@ export default function Advisors() {
           <h1>Asesores</h1>
           <div className="sub">Personal de asesoría técnica y comercial</div>
         </div>
-        <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Asesor</button>
+        {can('ADVISORS_CREATE') && <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Asesor</button>}
       </div>
 
       <div className="card">
@@ -139,8 +141,8 @@ export default function Advisors() {
                   <td data-label="Registro" className="text-muted">{fmtDate(r.created_at)}</td>
                   <td>
                     <div className="row-actions">
-<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
-            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
+                      {can('ADVISORS_UPDATE') && <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>}
+                      {can('ADVISORS_DELETE') && <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>}
                     </div>
                   </td>
                 </tr>

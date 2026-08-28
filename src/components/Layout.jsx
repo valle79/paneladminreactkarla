@@ -1,20 +1,22 @@
 import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, Navigate } from 'react-router-dom';
 import Icon from './Icon';
 import { useAuth } from '../auth';
 import logoElIqueno from '../images/Logo-El-Iqueño.png';
 
 const NAV = [
   { section: 'Principal' },
-  { to: '/', end: true, icon: 'dashboard', label: 'Dashboard', section: 'Principal' },
+  { to: '/', end: true, icon: 'dashboard', label: 'Dashboard', section: 'Principal', perm: 'DASHBOARD_VIEW' },
   { section: 'Gestión' },
-  { to: '/asesores', icon: 'conference', label: 'Asesores' },
-  { to: '/productos', icon: 'tractor', label: 'Productos' },
-  { to: '/repuestos', icon: 'wrench', label: 'Repuestos' },
-  { to: '/servicios', icon: 'money-bag', label: 'Servicios' },
-  { to: '/clientes', icon: 'user-male-circle', label: 'Clientes' },
-  { to: '/promociones', icon: 'price-tag', label: 'Promociones' },
-  { to: '/ventas', icon: 'shopping-cart', label: 'Ventas' },
+  { to: '/asesores', icon: 'conference', label: 'Asesores', perm: 'ADVISORS_VIEW' },
+  { to: '/productos', icon: 'tractor', label: 'Productos', perm: 'PRODUCTS_VIEW' },
+  { to: '/repuestos', icon: 'wrench', label: 'Repuestos', perm: 'SPARE_PARTS_VIEW' },
+  { to: '/servicios', icon: 'money-bag', label: 'Servicios', perm: 'SERVICES_VIEW' },
+  { to: '/clientes', icon: 'user-male-circle', label: 'Clientes', perm: 'CLIENTS_VIEW' },
+  { to: '/promociones', icon: 'price-tag', label: 'Promociones', perm: 'PROMOTIONS_VIEW' },
+  { to: '/ventas', icon: 'shopping-cart', label: 'Ventas', perm: 'SALES_VIEW' },
+  { to: '/usuarios', icon: 'user-male-circle', label: 'Usuarios', perm: 'USERS_VIEW' },
+  { to: '/roles', icon: 'security-checked', label: 'Roles', perm: 'ROLES_VIEW' },
 ];
 
 const TITLES = {
@@ -26,10 +28,12 @@ const TITLES = {
   '/clientes': 'Gestión de Clientes',
   '/promociones': 'Gestión de Promociones',
   '/ventas': 'Gestión de Ventas',
+  '/usuarios': 'Gestión de Usuarios',
+  '/roles': 'Gestión de Roles',
 };
 
 export default function Layout({ children }) {
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const title = TITLES[pathname] || 'Panel Administrativo';
@@ -37,6 +41,9 @@ export default function Layout({ children }) {
   const today = new Date().toLocaleDateString('es-PE', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
+
+  // Menú dinámico según permisos del backend
+  const visible = NAV.filter((item) => !item.perm || can(item.perm));
 
   return (
     <div className="layout">
@@ -51,7 +58,7 @@ export default function Layout({ children }) {
         </div>
 
         <nav style={{ flex: 1, overflowY: 'auto', paddingBottom: 10 }}>
-          {NAV.map((item, i) =>
+          {visible.map((item, i) =>
             item.section && !item.to ? (
               <div key={i} className="nav-section">{item.section}</div>
             ) : item.to ? (
@@ -71,10 +78,10 @@ export default function Layout({ children }) {
 
         <div className="sidebar-foot">
           <div className="sidebar-user">
-            <span className="avatar">A</span>
+            <span className="avatar">{(user?.name || 'A').charAt(0).toUpperCase()}</span>
             <span style={{ minWidth: 0 }}>
-              <b>{user?.name || 'Administrador'}</b>
-              <small>Panel de control</small>
+              <b>{user?.name || 'Usuario'}</b>
+              <small>{user?.roles?.map((r) => r.code).join(', ') || 'Panel de control'}</small>
             </span>
             <button className="btn-icon" style={{ marginLeft: 'auto', borderColor: 'rgba(255,255,255,0.15)', color: '#c8dfd0' }} onClick={logout} title="Cerrar sesión">
               <Icon name="exit" size={15} />

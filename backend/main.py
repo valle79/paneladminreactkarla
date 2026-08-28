@@ -18,9 +18,12 @@ from pydantic import BaseModel
 
 import consulta_docs
 import db
+import rbac
 import storage
 import whatsapp
-from auth import create_token, require_auth
+import admin_users
+from auth import create_token, require_auth, get_current_user, require_permission
+import password as pw
 
 load_dotenv()
 
@@ -57,6 +60,20 @@ app.add_middleware(
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
+app.include_router(admin_users.router)
+
+
+@app.on_event("startup")
+def _startup_seed():
+    """Siembra permisos y roles. No rompe el sistema si faltan tablas (p. ej. en local)."""
+    try:
+        rbac.seed_permissions()
+        rbac.seed_roles()
+    except Exception:
+        # En un entorno sin las tablas RBAC aún, no bloqueamos el arranque.
+        pass
+
+
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".mp4", ".webm", ".mov"}
 MAX_SIZE = 60 * 1024 * 1024  # 60 MB
 
@@ -75,14 +92,72 @@ def _conn_or_400(fn):
 
 class LoginRequest(BaseModel):
     password: str
+    email: str | None = None
+
+
+def _login_by_user(email: str, password: str) -> dict:
+    """Autenticación basada en la tabla users (email + password con hash)."""
+    row = db.fetch_one("SELECT * FROM users WHERE LOWER(email) = %s", (email.strip().lower(),))
+    if not row or not pw.verify_password(password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
+    if not row["active"]:
+        raise HTTPException(status_code=403, detail="Este usuario está desactivado")
+    db.execute("UPDATE users SET last_login_at = now() WHERE id = %s", (row["id"],), returning=None)
+    rbac.audit(row["id"], row["email"], "login", "auth", row["id"], {})
+    return row
+
+
+def _ensure_legacy_super_admin() -> dict:
+    """
+    Migración segura: si el usuario administra con el acceso legacy (solo contraseña),
+    aseguramos que exista un SUPER_ADMIN con las credenciales de .env.
+    """
+    email = os.getenv("ADMIN_EMAIL", "admin@iqueno.sac").strip().lower()
+    password = os.getenv("ADMIN_PASSWORD", "") or os.getenv("AUTH_PASSWORD", "iqueño2026")
+    row = db.fetch_one("SELECT * FROM users WHERE LOWER(email) = %s", (email,))
+    role = db.fetch_one("SELECT id FROM roles WHERE code = 'SUPER_ADMIN'")
+    if not row:
+        row = db.execute(
+            "INSERT INTO users (name, email, password_hash) VALUES (%s,%s,%s) RETURNING *",
+            ("Administrador", email, pw.hash_password(password)),
+        )
+    if role:
+        db.execute("INSERT INTO user_roles (user_id, role_id) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                   (row["id"], role["id"]), returning=None)
+    return dict(row)
 
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
-    if req.password != os.getenv("AUTH_PASSWORD", "iqueño2026"):
-        raise HTTPException(status_code=401, detail="Contraseña incorrecta")
-    token = create_token({"role": "admin"})
-    return {"token": token, "user": {"name": "Administrador", "email": "admin@iqueño.sac"}}
+    if req.email and req.email.strip():
+        # Login moderno: email + contraseña (usuarios de la tabla `users`)
+        user = _login_by_user(req.email, req.password)
+    else:
+        # Legacy: única contraseña del panel -> migra al SUPER_ADMIN por defecto
+        if req.password != os.getenv("AUTH_PASSWORD", "iqueño2026"):
+            raise HTTPException(status_code=401, detail="Contraseña incorrecta")
+        user = _ensure_legacy_super_admin()
+    token = create_token({"sub": user["id"], "role": "user"})
+    return {
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"],
+        },
+    }
+
+
+@app.get("/api/auth/me")
+def auth_me(current: dict = Depends(get_current_user)):
+    return {
+        "id": current["id"],
+        "name": current["name"],
+        "email": current["email"],
+        "active": current["active"],
+        "roles": current["roles"],
+        "permissions": current["permissions"],
+    }
 
 # ============================================================================
 # CONSULTA RENIEC (DNI) / SUNAT (RUC)
@@ -97,7 +172,7 @@ class RucConsultaRequest(BaseModel):
 
 
 @app.post("/api/consultar/dni")
-def consultar_dni_endpoint(payload: DniConsultaRequest, _: dict = Depends(require_auth)):
+def consultar_dni_endpoint(payload: DniConsultaRequest, _: dict = Depends(require_permission("CONSULTAR_DNI_RUC"))):
     try:
         return consulta_docs.consultar_dni(payload.dni)
     except ValueError as e:
@@ -107,7 +182,7 @@ def consultar_dni_endpoint(payload: DniConsultaRequest, _: dict = Depends(requir
 
 
 @app.post("/api/consultar/ruc")
-def consultar_ruc_endpoint(payload: RucConsultaRequest, _: dict = Depends(require_auth)):
+def consultar_ruc_endpoint(payload: RucConsultaRequest, _: dict = Depends(require_permission("CONSULTAR_DNI_RUC"))):
     try:
         return consulta_docs.consultar_ruc(payload.ruc)
     except ValueError as e:
@@ -121,7 +196,7 @@ def consultar_ruc_endpoint(payload: RucConsultaRequest, _: dict = Depends(requir
 # ============================================================================
 
 @app.get("/api/stats")
-def get_stats(_: dict = Depends(require_auth)):
+def get_stats(_: dict = Depends(require_permission("STATS_VIEW"))):
     def stats():
         conn = db.get_conn()
         try:
@@ -294,28 +369,36 @@ advisors_crud = AdvisorMixin()
 
 
 @app.get("/api/advisors")
-def list_advisors(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+def list_advisors(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("ADVISORS_VIEW"))):
     return _conn_or_400(lambda: advisors_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/advisors")
-def create_advisor(payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: advisors_crud.create(payload))
+def create_advisor(payload: dict, actor: dict = Depends(require_permission("ADVISORS_CREATE"))):
+    item = _conn_or_400(lambda: advisors_crud.create(payload))
+    rbac.audit(actor["id"], actor["email"], "create", "advisors", item["id"], {"name": payload.get("name")})
+    return item
 
 
 @app.put("/api/advisors/{item_id}")
-def update_advisor(item_id: int, payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: advisors_crud.update(item_id, payload))
+def update_advisor(item_id: int, payload: dict, actor: dict = Depends(require_permission("ADVISORS_UPDATE"))):
+    item = _conn_or_400(lambda: advisors_crud.update(item_id, payload))
+    rbac.audit(actor["id"], actor["email"], "update", "advisors", item_id, {"name": payload.get("name")})
+    return item
 
 
 @app.delete("/api/advisors/{item_id}")
-def delete_advisor(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: advisors_crud.soft_delete(item_id))
+def delete_advisor(item_id: int, actor: dict = Depends(require_permission("ADVISORS_DELETE"))):
+    res = _conn_or_400(lambda: advisors_crud.soft_delete(item_id))
+    rbac.audit(actor["id"], actor["email"], "delete", "advisors", item_id, {})
+    return res
 
 
 @app.post("/api/advisors/{item_id}/restore")
-def restore_advisor(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: advisors_crud.restore(item_id))
+def restore_advisor(item_id: int, actor: dict = Depends(require_permission("ADVISORS_DELETE"))):
+    res = _conn_or_400(lambda: advisors_crud.restore(item_id))
+    rbac.audit(actor["id"], actor["email"], "restore", "advisors", item_id, {})
+    return res
 
 
 # ============================================================================
@@ -331,28 +414,36 @@ products_crud = ProductMixin()
 
 
 @app.get("/api/products")
-def list_products(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+def list_products(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("PRODUCTS_VIEW"))):
     return _conn_or_400(lambda: products_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/products")
-def create_product(payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: products_crud.create(payload))
+def create_product(payload: dict, actor: dict = Depends(require_permission("PRODUCTS_CREATE"))):
+    item = _conn_or_400(lambda: products_crud.create(payload))
+    rbac.audit(actor["id"], actor["email"], "create", "products", item["id"], {"name": payload.get("name")})
+    return item
 
 
 @app.put("/api/products/{item_id}")
-def update_product(item_id: int, payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: products_crud.update(item_id, payload))
+def update_product(item_id: int, payload: dict, actor: dict = Depends(require_permission("PRODUCTS_UPDATE"))):
+    item = _conn_or_400(lambda: products_crud.update(item_id, payload))
+    rbac.audit(actor["id"], actor["email"], "update", "products", item_id, {"name": payload.get("name")})
+    return item
 
 
 @app.delete("/api/products/{item_id}")
-def delete_product(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: products_crud.soft_delete(item_id))
+def delete_product(item_id: int, actor: dict = Depends(require_permission("PRODUCTS_DELETE"))):
+    res = _conn_or_400(lambda: products_crud.soft_delete(item_id))
+    rbac.audit(actor["id"], actor["email"], "delete", "products", item_id, {})
+    return res
 
 
 @app.post("/api/products/{item_id}/restore")
-def restore_product(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: products_crud.restore(item_id))
+def restore_product(item_id: int, actor: dict = Depends(require_permission("PRODUCTS_DELETE"))):
+    res = _conn_or_400(lambda: products_crud.restore(item_id))
+    rbac.audit(actor["id"], actor["email"], "restore", "products", item_id, {})
+    return res
 
 
 # ============================================================================
@@ -368,28 +459,36 @@ spare_parts_crud = SparePartMixin()
 
 
 @app.get("/api/spare-parts")
-def list_spare_parts(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+def list_spare_parts(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("SPARE_PARTS_VIEW"))):
     return _conn_or_400(lambda: spare_parts_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/spare-parts")
-def create_spare_part(payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: spare_parts_crud.create(payload))
+def create_spare_part(payload: dict, actor: dict = Depends(require_permission("SPARE_PARTS_CREATE"))):
+    item = _conn_or_400(lambda: spare_parts_crud.create(payload))
+    rbac.audit(actor["id"], actor["email"], "create", "spare_parts", item["id"], {"name": payload.get("name")})
+    return item
 
 
 @app.put("/api/spare-parts/{item_id}")
-def update_spare_part(item_id: int, payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: spare_parts_crud.update(item_id, payload))
+def update_spare_part(item_id: int, payload: dict, actor: dict = Depends(require_permission("SPARE_PARTS_UPDATE"))):
+    item = _conn_or_400(lambda: spare_parts_crud.update(item_id, payload))
+    rbac.audit(actor["id"], actor["email"], "update", "spare_parts", item_id, {"name": payload.get("name")})
+    return item
 
 
 @app.delete("/api/spare-parts/{item_id}")
-def delete_spare_part(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: spare_parts_crud.soft_delete(item_id))
+def delete_spare_part(item_id: int, actor: dict = Depends(require_permission("SPARE_PARTS_DELETE"))):
+    res = _conn_or_400(lambda: spare_parts_crud.soft_delete(item_id))
+    rbac.audit(actor["id"], actor["email"], "delete", "spare_parts", item_id, {})
+    return res
 
 
 @app.post("/api/spare-parts/{item_id}/restore")
-def restore_spare_part(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: spare_parts_crud.restore(item_id))
+def restore_spare_part(item_id: int, actor: dict = Depends(require_permission("SPARE_PARTS_DELETE"))):
+    res = _conn_or_400(lambda: spare_parts_crud.restore(item_id))
+    rbac.audit(actor["id"], actor["email"], "restore", "spare_parts", item_id, {})
+    return res
 
 
 # ============================================================================
@@ -456,28 +555,36 @@ services_crud = ServiceMixin()
 
 
 @app.get("/api/services")
-def list_services(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+def list_services(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("SERVICES_VIEW"))):
     return _conn_or_400(lambda: services_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/services")
-def create_service(payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: services_crud.create(payload))
+def create_service(payload: dict, actor: dict = Depends(require_permission("SERVICES_CREATE"))):
+    item = _conn_or_400(lambda: services_crud.create(payload))
+    rbac.audit(actor["id"], actor["email"], "create", "services", item["id"], {"name": payload.get("name")})
+    return item
 
 
 @app.put("/api/services/{item_id}")
-def update_service(item_id: int, payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: services_crud.update(item_id, payload))
+def update_service(item_id: int, payload: dict, actor: dict = Depends(require_permission("SERVICES_UPDATE"))):
+    item = _conn_or_400(lambda: services_crud.update(item_id, payload))
+    rbac.audit(actor["id"], actor["email"], "update", "services", item_id, {"name": payload.get("name")})
+    return item
 
 
 @app.delete("/api/services/{item_id}")
-def delete_service(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: services_crud.soft_delete(item_id))
+def delete_service(item_id: int, actor: dict = Depends(require_permission("SERVICES_DELETE"))):
+    res = _conn_or_400(lambda: services_crud.soft_delete(item_id))
+    rbac.audit(actor["id"], actor["email"], "delete", "services", item_id, {})
+    return res
 
 
 @app.post("/api/services/{item_id}/restore")
-def restore_service(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: services_crud.restore(item_id))
+def restore_service(item_id: int, actor: dict = Depends(require_permission("SERVICES_DELETE"))):
+    res = _conn_or_400(lambda: services_crud.restore(item_id))
+    rbac.audit(actor["id"], actor["email"], "restore", "services", item_id, {})
+    return res
 
 
 # ============================================================================
@@ -492,28 +599,36 @@ clients_crud = ClientMixin()
 
 
 @app.get("/api/clients")
-def list_clients(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+def list_clients(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("CLIENTS_VIEW"))):
     return _conn_or_400(lambda: clients_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/clients")
-def create_client(payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_crud.create(payload))
+def create_client(payload: dict, actor: dict = Depends(require_permission("CLIENTS_CREATE"))):
+    item = _conn_or_400(lambda: clients_crud.create(payload))
+    rbac.audit(actor["id"], actor["email"], "create", "clients", item["id"], {"dni": payload.get("dni")})
+    return item
 
 
 @app.put("/api/clients/{item_id}")
-def update_client(item_id: int, payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_crud.update(item_id, payload))
+def update_client(item_id: int, payload: dict, actor: dict = Depends(require_permission("CLIENTS_UPDATE"))):
+    item = _conn_or_400(lambda: clients_crud.update(item_id, payload))
+    rbac.audit(actor["id"], actor["email"], "update", "clients", item_id, {"dni": payload.get("dni")})
+    return item
 
 
 @app.delete("/api/clients/{item_id}")
-def delete_client(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_crud.soft_delete(item_id))
+def delete_client(item_id: int, actor: dict = Depends(require_permission("CLIENTS_DELETE"))):
+    res = _conn_or_400(lambda: clients_crud.soft_delete(item_id))
+    rbac.audit(actor["id"], actor["email"], "delete", "clients", item_id, {})
+    return res
 
 
 @app.post("/api/clients/{item_id}/restore")
-def restore_client(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_crud.restore(item_id))
+def restore_client(item_id: int, actor: dict = Depends(require_permission("CLIENTS_DELETE"))):
+    res = _conn_or_400(lambda: clients_crud.restore(item_id))
+    rbac.audit(actor["id"], actor["email"], "restore", "clients", item_id, {})
+    return res
 
 
 # ============================================================================
@@ -528,28 +643,36 @@ clients_ruc_crud = ClientRucMixin()
 
 
 @app.get("/api/clients-ruc")
-def list_clients_ruc(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+def list_clients_ruc(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("CLIENTS_VIEW"))):
     return _conn_or_400(lambda: clients_ruc_crud.list(include_deleted, page, limit))
 
 
 @app.post("/api/clients-ruc")
-def create_client_ruc(payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_ruc_crud.create(payload))
+def create_client_ruc(payload: dict, actor: dict = Depends(require_permission("CLIENTS_CREATE"))):
+    item = _conn_or_400(lambda: clients_ruc_crud.create(payload))
+    rbac.audit(actor["id"], actor["email"], "create", "clients_ruc", item["id"], {"ruc": payload.get("ruc")})
+    return item
 
 
 @app.put("/api/clients-ruc/{item_id}")
-def update_client_ruc(item_id: int, payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_ruc_crud.update(item_id, payload))
+def update_client_ruc(item_id: int, payload: dict, actor: dict = Depends(require_permission("CLIENTS_UPDATE"))):
+    item = _conn_or_400(lambda: clients_ruc_crud.update(item_id, payload))
+    rbac.audit(actor["id"], actor["email"], "update", "clients_ruc", item_id, {"ruc": payload.get("ruc")})
+    return item
 
 
 @app.delete("/api/clients-ruc/{item_id}")
-def delete_client_ruc(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_ruc_crud.soft_delete(item_id))
+def delete_client_ruc(item_id: int, actor: dict = Depends(require_permission("CLIENTS_DELETE"))):
+    res = _conn_or_400(lambda: clients_ruc_crud.soft_delete(item_id))
+    rbac.audit(actor["id"], actor["email"], "delete", "clients_ruc", item_id, {})
+    return res
 
 
 @app.post("/api/clients-ruc/{item_id}/restore")
-def restore_client_ruc(item_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: clients_ruc_crud.restore(item_id))
+def restore_client_ruc(item_id: int, actor: dict = Depends(require_permission("CLIENTS_DELETE"))):
+    res = _conn_or_400(lambda: clients_ruc_crud.restore(item_id))
+    rbac.audit(actor["id"], actor["email"], "restore", "clients_ruc", item_id, {})
+    return res
 
 
 # ============================================================================
@@ -605,7 +728,7 @@ promotions_crud = PromotionMixin()
 
 
 @app.get("/api/promotions")
-def list_promotions(only_web: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_auth)):
+def list_promotions(only_web: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("PROMOTIONS_VIEW"))):
     def run():
         if only_web:
             # Sin paginación para web pública
@@ -619,18 +742,24 @@ def list_promotions(only_web: bool = False, page: int = 1, limit: int = 50, _: d
 
 
 @app.post("/api/promotions")
-def create_promotion(payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: promotions_crud.create(payload))
+def create_promotion(payload: dict, actor: dict = Depends(require_permission("PROMOTIONS_CREATE"))):
+    item = _conn_or_400(lambda: promotions_crud.create(payload))
+    rbac.audit(actor["id"], actor["email"], "create", "promotions", item["id"], {"title": payload.get("title")})
+    return item
 
 
 @app.put("/api/promotions/{item_id}")
-def update_promotion(item_id: str, payload: dict, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: promotions_crud.update(item_id, payload))
+def update_promotion(item_id: str, payload: dict, actor: dict = Depends(require_permission("PROMOTIONS_UPDATE"))):
+    item = _conn_or_400(lambda: promotions_crud.update(item_id, payload))
+    rbac.audit(actor["id"], actor["email"], "update", "promotions", item_id, {"title": payload.get("title")})
+    return item
 
 
 @app.delete("/api/promotions/{item_id}")
-def delete_promotion(item_id: str, _: dict = Depends(require_auth)):
-    return _conn_or_400(lambda: promotions_crud.soft_delete(item_id))
+def delete_promotion(item_id: str, actor: dict = Depends(require_permission("PROMOTIONS_DELETE"))):
+    res = _conn_or_400(lambda: promotions_crud.soft_delete(item_id))
+    rbac.audit(actor["id"], actor["email"], "delete", "promotions", item_id, {})
+    return res
 
 
 # ============================================================================
@@ -795,7 +924,7 @@ def list_sales(
     limit: int = 50,
     date_from: str = None,
     date_to: str = None,
-    _: dict = Depends(require_auth),
+    _: dict = Depends(require_permission("SALES_VIEW")),
 ):
     def valid_date(v: str) -> bool:
         try:
@@ -848,7 +977,7 @@ def list_sales(
 
 
 @app.get("/api/sales/next-number")
-def next_sale_number(invoice_type: str, _: dict = Depends(require_auth)):
+def next_sale_number(invoice_type: str, _: dict = Depends(require_permission("SALES_VIEW"))):
     def run():
         row = db.fetch_one(
             "SELECT COALESCE(MAX(invoice_number), 0) AS max_n FROM sales "
@@ -860,7 +989,7 @@ def next_sale_number(invoice_type: str, _: dict = Depends(require_auth)):
 
 
 @app.get("/api/sales/{sale_id}")
-def get_sale(sale_id: int, _: dict = Depends(require_auth)):
+def get_sale(sale_id: int, _: dict = Depends(require_permission("SALES_VIEW"))):
     def run():
         row = db.fetch_one("SELECT * FROM sales WHERE id = %s", (sale_id,))
         if not row or row.get("deleted"):
@@ -870,7 +999,7 @@ def get_sale(sale_id: int, _: dict = Depends(require_auth)):
 
 
 @app.post("/api/sales/{sale_id}/share-token")
-def get_share_token(sale_id: int, _: dict = Depends(require_auth)):
+def get_share_token(sale_id: int, _: dict = Depends(require_permission("SALES_VIEW"))):
     def run():
         row = db.fetch_one("SELECT share_token FROM sales WHERE id = %s AND NOT deleted", (sale_id,))
         if not row:
@@ -894,7 +1023,7 @@ def public_doc(sale_id: int, token: str):
 
 
 @app.post("/api/sales")
-def create_sale(payload: dict, _: dict = Depends(require_auth)):
+def create_sale(payload: dict, actor: dict = Depends(require_permission("SALES_CREATE"))):
     def run():
         conn = db.get_conn()
         try:
@@ -966,6 +1095,9 @@ def create_sale(payload: dict, _: dict = Depends(require_auth)):
                         ),
                     )
             conn.commit()
+            rbac.audit(actor["id"], actor["email"], "create", "sales", sale_row["id"],
+                       {"invoice": f"{sale_row.get('invoice_type')}-{sale_row.get('invoice_number')}",
+                        "total": float(sale_row.get("total") or 0)})
             return _serialize_sale(sale_row)
         except HTTPException:
             conn.rollback()
@@ -979,7 +1111,7 @@ def create_sale(payload: dict, _: dict = Depends(require_auth)):
 
 
 @app.put("/api/sales/{sale_id}")
-def update_sale(sale_id: int, payload: dict, _: dict = Depends(require_auth)):
+def update_sale(sale_id: int, payload: dict, actor: dict = Depends(require_permission("SALES_UPDATE"))):
     def run():
         existing = db.fetch_one("SELECT * FROM sales WHERE id = %s", (sale_id,))
         if not existing or existing.get("deleted"):
@@ -1048,6 +1180,9 @@ def update_sale(sale_id: int, payload: dict, _: dict = Depends(require_auth)):
                         ),
                     )
             conn.commit()
+            rbac.audit(actor["id"], actor["email"], "update", "sales", sale_id,
+                       {"invoice": f"{sale_row.get('invoice_type')}-{sale_row.get('invoice_number')}",
+                        "total": float(sale_row.get("total") or 0)})
             return _serialize_sale(sale_row)
         except HTTPException:
             conn.rollback()
@@ -1061,7 +1196,7 @@ def update_sale(sale_id: int, payload: dict, _: dict = Depends(require_auth)):
 
 
 @app.patch("/api/sales/{sale_id}/payment")
-def update_sale_payment(sale_id: int, payload: dict, _: dict = Depends(require_auth)):
+def update_sale_payment(sale_id: int, payload: dict, actor: dict = Depends(require_permission("SALES_UPDATE"))):
     def run():
         existing = db.fetch_one("SELECT * FROM sales WHERE id = %s", (sale_id,))
         if not existing or existing.get("deleted"):
@@ -1096,18 +1231,22 @@ def update_sale_payment(sale_id: int, payload: dict, _: dict = Depends(require_a
                 returning=None,
             )
         updated = db.fetch_one("SELECT * FROM sales WHERE id = %s", (sale_id,))
+        rbac.audit(actor["id"], actor["email"], "payment_update", "sales", sale_id,
+                   {"payment_status": status})
         return _serialize_sale(updated)
     return _conn_or_400(run)
 
 
 @app.delete("/api/sales/{sale_id}")
-def delete_sale(sale_id: int, _: dict = Depends(require_auth)):
-    return _conn_or_400(
+def delete_sale(sale_id: int, actor: dict = Depends(require_permission("SALES_DELETE"))):
+    res = _conn_or_400(
         lambda: db.execute(
             "UPDATE sales SET deleted = true WHERE id = %s", (sale_id,), returning=None
         )
         and {"ok": True}
     )
+    rbac.audit(actor["id"], actor["email"], "delete", "sales", sale_id, {})
+    return res
 
 
 # ============================================================================
@@ -1144,7 +1283,7 @@ def whatsapp_send_media(req: WhatsappSendRequest, request: Request, _: dict = De
 # ============================================================================
 
 @app.post("/api/upload")
-def upload_file(file: UploadFile = File(...), _: dict = Depends(require_auth)):
+def upload_file(file: UploadFile = File(...), _: dict = Depends(require_permission("UPLOAD_FILES"))):
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXT:
         raise HTTPException(status_code=400, detail="Formato de archivo no permitido")
@@ -1164,7 +1303,7 @@ def upload_file(file: UploadFile = File(...), _: dict = Depends(require_auth)):
 # ============================================================================
 
 @app.get("/api/catalogs")
-def get_catalogs(_: dict = Depends(require_auth)):
+def get_catalogs(_: dict = Depends(require_permission("SALES_VIEW"))):
     """Todos los catálogos del modal de ventas en UNA sola conexión."""
     def run():
         conn = db.get_conn()

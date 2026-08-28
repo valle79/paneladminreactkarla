@@ -6,6 +6,7 @@ import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, ImageCell, PdfLink, fmtMoney, fmtDate } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
 import { Pagination } from '../components/Pagination';
+import { useAuth } from '../auth';
 
 const parseJson = (v, fallback) => {
   if (v == null || v === '') return fallback;
@@ -21,6 +22,7 @@ const empty = {
 
 export default function SpareParts() {
   const toast = useToast();
+  const { can } = useAuth();
   const { ask, ConfirmDialog } = useConfirm();
   const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(false);
@@ -106,7 +108,9 @@ export default function SpareParts() {
           <h1>Repuestos</h1>
           <div className="sub">Repuestos y accesorios para maquinaria agrícola</div>
         </div>
-        <button className="btn btn-yellow btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Repuesto</button>
+        {can('SPARE_PARTS_CREATE') && (
+          <button className="btn btn-yellow btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Repuesto</button>
+        )}
       </div>
 
       <div className="card">
@@ -144,8 +148,8 @@ export default function SpareParts() {
                     <td data-label="Registro" className="text-muted">{fmtDate(r.created_at)}</td>
                     <td>
                       <div className="row-actions">
-<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
-            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
+                        {can('SPARE_PARTS_UPDATE') && <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>}
+                        {can('SPARE_PARTS_DELETE') && <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>}
                       </div>
                     </td>
                   </tr>

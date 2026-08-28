@@ -6,6 +6,7 @@ import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, fmtDate, Badge } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
 import { Pagination } from '../components/Pagination';
+import { useAuth } from '../auth';
 
 const empty = {
   title: '', subtitle: '', features: '', valid_until: '',
@@ -15,6 +16,7 @@ const empty = {
 
 export default function Promotions() {
   const toast = useToast();
+  const { can } = useAuth();
   const { ask, ConfirmDialog } = useConfirm();
   const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(false);
@@ -91,7 +93,7 @@ export default function Promotions() {
           <h1>Promociones</h1>
           <div className="sub">Ofertas visibles en la web y en el sistema</div>
         </div>
-        <button className="btn btn-yellow btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Promoción</button>
+        {can('PROMOTIONS_CREATE') && <button className="btn btn-yellow btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Promoción</button>}
       </div>
 
       <div className="card">
@@ -141,8 +143,8 @@ export default function Promotions() {
                   <td data-label="Orden"><span className="chip"><Icon name="sort" size={12} /> {r.display_order}</span></td>
                   <td>
                     <div className="row-actions">
-<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
-            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
+                      {can('PROMOTIONS_UPDATE') && <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>}
+                      {can('PROMOTIONS_DELETE') && <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>}
                     </div>
                   </td>
                 </tr>

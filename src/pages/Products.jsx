@@ -6,6 +6,7 @@ import { Modal, useConfirm } from '../components/Modal';
 import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, ImageCell, PdfLink, fmtMoney, fmtDate } from '../components/ui';
 import { FileUpload } from '../components/FileUpload';
 import { Pagination } from '../components/Pagination';
+import { useAuth } from '../auth';
 
 const empty = {
   name: '', description: '', price: '', image_url: null, pdf_url: null,
@@ -21,6 +22,7 @@ const parseJson = (v, fallback) => {
 
 export default function Products() {
   const toast = useToast();
+  const { can } = useAuth();
   const { ask, ConfirmDialog } = useConfirm();
   const [data, setData] = useState(null);
   const [modal, setModal] = useState(false);
@@ -169,7 +171,9 @@ export default function Products() {
           <h1>Productos</h1>
           <div className="sub">Maquinarias y productos fabricados · Galería</div>
         </div>
-        <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Producto</button>
+        {can('PRODUCTS_CREATE') && (
+          <button className="btn btn-primary btn-lg" onClick={openAdd}><Icon name="plus" size={17} /> Agregar Producto</button>
+        )}
       </div>
 
       <div className="card">
@@ -219,8 +223,8 @@ export default function Products() {
                     <td>
                       <div className="row-actions">
                         <button className="btn-icon wa" onClick={() => openWa(r)} title="Enviar ficha PDF por WhatsApp"><Icon name="whatsapp" size={14} /></button>
-<button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>
-            <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>
+                        {can('PRODUCTS_UPDATE') && <button className="btn-icon" onClick={() => openEdit(r)} title="Editar"><Icon name="edit" size={14} /></button>}
+                        {can('PRODUCTS_DELETE') && <button className="btn-icon danger" onClick={() => remove(r)} title="Eliminar"><Icon name="trash" size={14} /></button>}
                       </div>
                     </td>
                   </tr>
