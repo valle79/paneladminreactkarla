@@ -40,6 +40,8 @@ _default_origins = [
     "http://127.0.0.1:5175",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://eliquenoimplementosagricolas.com",
+    "https://www.eliquenoimplementosagricolas.com",
     "https://panelaiqueno.netlify.app",
 ]
 _cors_env = os.getenv("CORS_ORIGINS", "").strip()

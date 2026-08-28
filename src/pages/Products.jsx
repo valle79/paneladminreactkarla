@@ -264,7 +264,7 @@ export default function Products() {
           <label>Descripción</label>
           <textarea className="textarea" placeholder="Descripción breve del producto" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
-        <div className="grid-3">
+        <div className="grid-2">
           <div className="field">
             <label>Precio (S/)</label>
             <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
@@ -273,13 +273,7 @@ export default function Products() {
             <label>Stock</label>
             <input className="input" type="number" min="0" step="1" placeholder="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
           </div>
-          <div className="field">
-            <label>Estado</label>
-            <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              <option value="active">Activo (visible en web)</option>
-              <option value="inactive">Inactivo (oculto)</option>
-            </select>
-          </div>
+
         </div>
 
         <div className="field">

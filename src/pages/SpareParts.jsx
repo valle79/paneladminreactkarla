@@ -196,18 +196,9 @@ export default function SpareParts() {
           </div>
         </div>
 
-        <div className="grid-2">
-          <div className="field">
-            <label>Stock</label>
-            <input className="input" type="number" min="0" step="1" placeholder="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Estado</label>
-            <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              <option value="active">Activo (visible en web)</option>
-              <option value="inactive">Inactivo (oculto)</option>
-            </select>
-          </div>
+        <div className="field">
+          <label>Stock</label>
+          <input className="input" type="number" min="0" step="1" placeholder="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
         </div>
 
         <div className="field">
