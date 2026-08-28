@@ -15,6 +15,7 @@ const parseJson = (v, fallback) => {
 
 const empty = {
   name: '', description: '', price: '', image_url: null, pdf_url: null,
+  stock: 0, status: 'active',
   specifications: [], features: [],
 };
 
@@ -47,6 +48,7 @@ export default function SpareParts() {
     setForm({
       name: r.name || '', description: r.description || '', price: r.price || '',
       image_url: r.image_url, pdf_url: r.pdf_url,
+      stock: r.stock ?? 0, status: r.status || 'active',
       specifications: parseJson(r.specifications, []), features: parseJson(r.features, []),
     });
     setModal(true);
@@ -68,6 +70,8 @@ export default function SpareParts() {
         price: parseFloat(String(form.price).replace(',', '.')),
         image_url: form.image_url,
         pdf_url: form.pdf_url,
+        stock: Number(form.stock) || 0,
+        status: form.status === 'inactive' ? 'inactive' : 'active',
         specifications: JSON.stringify(form.specifications.filter((s) => s.label || s.value)),
         features: JSON.stringify(form.features.filter((f) => f.trim())),
       };
@@ -189,6 +193,20 @@ export default function SpareParts() {
           <div className="field">
             <label>Precio (S/) <span className="req">*</span></label>
             <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+          </div>
+        </div>
+
+        <div className="grid-2">
+          <div className="field">
+            <label>Stock</label>
+            <input className="input" type="number" min="0" step="1" placeholder="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Estado</label>
+            <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="active">Activo (visible en web)</option>
+              <option value="inactive">Inactivo (oculto)</option>
+            </select>
           </div>
         </div>
 

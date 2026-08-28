@@ -29,9 +29,24 @@ app = FastAPI(title="Iqueño SAC - API Panel Admin", version="1.0.0")
 UPLOAD_DIR = Path(__file__).parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+# CORS por entorno: CORS_ORIGINS (separados por coma). En producción NO debe ser "*".
+# Si se omite, se aplican estos orígenes por defecto (panel + web pública).
+_default_origins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+_cors_env = os.getenv("CORS_ORIGINS", "").strip()
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] if _cors_env else _default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -375,6 +390,58 @@ def restore_spare_part(item_id: int, _: dict = Depends(require_auth)):
 
 
 # ============================================================================
+# API PÚBLICA (web pública iquenosac) — sin autenticación
+# Devuelve solo registros activos (no borrados y con status = 'active').
+# ============================================================================
+
+_PUBLIC_ALLOWED = {"advisors", "products", "spare-parts"}
+# productos y repuestos tienen columnas stock/status y usan deleted para borrado
+_PUBLIC_ORDER = {
+    "advisors": "id",
+    "products": "id",
+    "spare-parts": "id",
+    "promotions": "display_order ASC NULLS LAST, created_at DESC NULLS LAST",
+}
+
+
+def _public_rows(table: str) -> list:
+    if table not in ("advisors", "machine_products", "spare_parts", "promotions"):
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+    order_key = table if table != "machine_products" else "products"
+    order_key = order_key if order_key != "spare_parts" else "spare-parts"
+    if table == "promotions":
+        sql = f"SELECT * FROM {table} WHERE is_active = true AND show_in_web = true ORDER BY {_PUBLIC_ORDER['promotions']}"
+    elif table == "advisors":
+        sql = f"SELECT * FROM {table} WHERE NOT deleted ORDER BY {_PUBLIC_ORDER['advisors']}"
+    else:
+        sql = f"SELECT * FROM {table} WHERE NOT deleted AND status = 'active' ORDER BY {_PUBLIC_ORDER[order_key]}"
+    rows = db.fetch_all(sql)
+    mixin = {"advisors": advisors_crud, "machine_products": products_crud,
+             "spare_parts": spare_parts_crud}.get(table)
+    return [mixin.hydrate(dict(r)) for r in rows] if mixin else [dict(r) for r in rows]
+
+
+@app.get("/public/advisors")
+def public_advisors():
+    return _conn_or_400(lambda: _public_rows("advisors"))
+
+
+@app.get("/public/products")
+def public_products():
+    return _conn_or_400(lambda: _public_rows("machine_products"))
+
+
+@app.get("/public/spare-parts")
+def public_spare_parts():
+    return _conn_or_400(lambda: _public_rows("spare_parts"))
+
+
+@app.get("/public/promotions")
+def public_promotions():
+    return _conn_or_400(lambda: _public_rows("promotions"))
+
+
+# ============================================================================
 # SERVICIOS
 # ============================================================================
 
@@ -489,6 +556,12 @@ def restore_client_ruc(item_id: int, _: dict = Depends(require_auth)):
 class PromotionMixin(SoftDeleteMixin):
     table = "promotions"
     json_cols = ()
+
+    def create(self, payload: dict):
+        data = {**payload}
+        next_order = db.fetch_one("SELECT COALESCE(MAX(display_order), 0) + 1 AS n FROM promotions")["n"]
+        data["display_order"] = next_order
+        return super().create(data)
 
     def list(self, include_deleted=False, page: int = 1, limit: int = 50):
         # Obtener total

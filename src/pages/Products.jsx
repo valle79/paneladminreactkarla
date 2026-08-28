@@ -9,6 +9,7 @@ import { Pagination } from '../components/Pagination';
 
 const empty = {
   name: '', description: '', price: '', image_url: null, pdf_url: null,
+  stock: 0, status: 'active',
   specifications: [], features: [], dimensions: { width: '', height: '', depth: '', weight: '' },
 };
 
@@ -67,6 +68,8 @@ export default function Products() {
       price: r.price || '',
       image_url: r.image_url,
       pdf_url: r.pdf_url,
+      stock: r.stock ?? 0,
+      status: r.status || 'active',
       specifications: parseJson(r.specifications, []),
       features: parseJson(r.features, []),
       dimensions: parseJson(r.dimensions, { width: '', height: '', depth: '', weight: '' }),
@@ -89,6 +92,8 @@ export default function Products() {
         price: form.price === '' ? 0 : parseFloat(String(form.price).replace(',', '.')),
         image_url: form.image_url,
         pdf_url: form.pdf_url,
+        stock: Number(form.stock) || 0,
+        status: form.status === 'inactive' ? 'inactive' : 'active',
         specifications: JSON.stringify(form.specifications.filter((s) => s.label || s.value)),
         features: JSON.stringify(form.features.filter((f) => f.trim())),
         dimensions: JSON.stringify({
@@ -178,6 +183,8 @@ export default function Products() {
                 <th>Imagen</th>
                 <th>Producto</th>
                 <th>Precio</th>
+                <th>Stock</th>
+                <th>Estado</th>
                 <th>Dimensiones</th>
                 <th>Ficha PDF</th>
                 <th>Registro</th>
@@ -195,6 +202,14 @@ export default function Products() {
                       <div className="desc-cell">{r.description || ''}</div>
                     </td>
                     <td data-label="Precio" className="money"><b>{fmtMoney(r.price)}</b></td>
+                    <td data-label="Stock">
+                      <span className={`stock-badge ${(r.stock ?? 0) > 0 ? 'ok' : 'zero'}`}>{r.stock ?? 0}</span>
+                    </td>
+                    <td data-label="Estado">
+                      <span className={`status-badge ${r.status === 'inactive' ? 'inactive' : 'active'}`}>
+                        {r.status === 'inactive' ? 'Inactivo' : 'Activo'}
+                      </span>
+                    </td>
                     <td data-label="Dimensiones" className="text-muted" style={{ fontSize: 12.5 }}>
                       {d.width ? `${d.width}×${d.height}×${d.depth} cm` : '—'}
                       {d.weight ? <div>Peso: {d.weight} kg</div> : null}
@@ -249,10 +264,21 @@ export default function Products() {
           <label>Descripción</label>
           <textarea className="textarea" placeholder="Descripción breve del producto" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
-        <div className="grid-2">
+        <div className="grid-3">
           <div className="field">
             <label>Precio (S/)</label>
             <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Stock</label>
+            <input className="input" type="number" min="0" step="1" placeholder="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Estado</label>
+            <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="active">Activo (visible en web)</option>
+              <option value="inactive">Inactivo (oculto)</option>
+            </select>
           </div>
         </div>
 

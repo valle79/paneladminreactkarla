@@ -1,5 +1,6 @@
 import Icon from './Icon';
 import { useMemo, useCallback, useState } from 'react';
+import { Image as ImageIcon } from 'lucide-react';
 import { assetUrl } from '../api';
 
 export function Loader({ text = 'Cargando...' }) {
@@ -98,17 +99,11 @@ export function ImageCell({ src, alt = 'imagen', width = 58 }) {
           </a>
         </span>
       ) : (
-        <span
-          aria-hidden
-          style={{
-            width: 28,
-            height: 28,
-            display: 'inline-block',
-            backgroundColor: '#a3b8aa',
-            WebkitMask: 'no-repeat center / contain url(https://img.icons8.com/ios/64/image.png)',
-            mask: 'no-repeat center / contain url(https://img.icons8.com/ios/64/image.png)',
-            opacity: 0.55,
-          }}
+        <ImageIcon
+          width={28}
+          height={28}
+          strokeWidth={1.6}
+          style={{ color: '#a3b8aa', opacity: 0.55 }}
         />
       )}
     </span>

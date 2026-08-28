@@ -183,15 +183,9 @@ export default function Promotions() {
           <label>Subtítulo</label>
           <input className="input" maxLength={200} placeholder="Ej. Nueva Presentación 2026" value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
         </div>
-        <div className="grid-2">
-          <div className="field">
-            <label>Vigencia <span className="req">*</span></label>
-            <input className="input" placeholder="Ej. 30 de Abril del 2026" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Orden de visualización</label>
-            <input className="input" type="number" min="0" value={form.display_order} onChange={(e) => setForm({ ...form, display_order: e.target.value })} />
-          </div>
+        <div className="field">
+          <label>Vigencia <span className="req">*</span></label>
+          <input className="input" type="date" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} />
         </div>
         <div className="field">
           <label>Detalle de la oferta</label>
@@ -206,16 +200,6 @@ export default function Promotions() {
             isImage={form.media_type !== 'video'}
             label="Arrastra una imagen o video (máx. 60MB)"
           />
-        </div>
-        <div className="grid-2">
-          <label className="check" style={{ alignItems: 'flex-start' }}>
-            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
-            <span><b>Promoción activa</b><br /><span className="hint">Disponible para mostrarse</span></span>
-          </label>
-          <label className="check" style={{ alignItems: 'flex-start' }}>
-            <input type="checkbox" checked={form.show_in_web} onChange={(e) => setForm({ ...form, show_in_web: e.target.checked })} />
-            <span><b>Visible en la web</b> <Icon name="visible" size={12} /><br /><span className="hint">Se muestra en el sitio público del Iqueño</span></span>
-          </label>
         </div>
       </Modal>
 

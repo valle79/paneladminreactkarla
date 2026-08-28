@@ -21,6 +21,9 @@ venv/
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+# Respaldo local de la BD (contiene datos y podría incluir info sensible)
+database/backups/
+
 # Editor / SO
 .vscode/
 .DS_Store
