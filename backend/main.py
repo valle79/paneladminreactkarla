@@ -40,6 +40,7 @@ _default_origins = [
     "http://127.0.0.1:5175",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://panelaiqueno.netlify.app",
 ]
 _cors_env = os.getenv("CORS_ORIGINS", "").strip()
 _cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] if _cors_env else _default_origins
