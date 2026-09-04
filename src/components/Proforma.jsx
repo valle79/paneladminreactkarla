@@ -191,7 +191,7 @@ function descriptionLine(item) {
 }
 
 /* Totales */
-function DocTotals({ sub, igv, total, symbol, o, isProformaLike }) {
+function DocTotals({ sub, igv, discount, total, symbol, o, isProformaLike }) {
   const igvRate = sub > 0 ? Math.round((igv / sub) * 100) : 0;
   const igvLabel = igvRate > 0 ? `IGV (${igvRate}%)` : 'IGV';
   return (
@@ -205,6 +205,7 @@ function DocTotals({ sub, igv, total, symbol, o, isProformaLike }) {
       <div className="proforma-totals-right">
         <div className="pt-line"><span>VALOR DE VENTA</span><b>{symbol} {formatMoneyPLN(sub)}</b></div>
         <div className="pt-line"><span>{igvLabel}</span><b>{symbol} {formatMoneyPLN(igv)}</b></div>
+        {discount > 0 && <div className="pt-line"><span>DESCUENTO</span><b>−{symbol} {formatMoneyPLN(discount)}</b></div>}
         <div className="pt-line pt-line-total"><span>PRECIO DE VENTA</span><b>{symbol} {formatMoneyPLN(total)}</b></div>
       </div>
     </div>
@@ -282,12 +283,12 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
 
   const sub = Number(sale.subtotal || 0);
   const igv = Number(sale.igv || 0);
+  const discount = Number(sale.discount_amount || 0);
   const total = Number(sale.total || 0);
 
   const symbol = moneySymbol(o.moneda);
   const absImg = (u) => (u && /^https?:\/\//.test(u) ? u : API_URL + u);
   const itemsConFoto = (sale.items || []).filter((it) => it.image_url);
-  const igvFactor = sub > 0 ? (igv / sub) : 0;
 
   const pagesTotal = itemsConFoto.length > 0 ? 2 : 1;
 
@@ -299,7 +300,7 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
           <DocHeader sale={sale} fechaDoc={fechaDoc} horaDoc={horaDoc} fechaPago={fechaPago} />
           <DocClientAndConditions client={client} docRuc={docRuc} clienteLinea={clienteLinea} sale={sale} o={o} isProformaLike={isProformaLike} />
           <DocItems items={sale.items} symbol={symbol} />
-          <DocTotals sub={sub} igv={igv} total={total} symbol={symbol} o={o} isProformaLike={isProformaLike} />
+          <DocTotals sub={sub} igv={igv} discount={discount} total={total} symbol={symbol} o={o} isProformaLike={isProformaLike} />
           <DocBank o={o} isProformaLike={isProformaLike} />
           <DocMessage isProformaLike={isProformaLike} />
           <DocSignature sale={sale} />
@@ -333,7 +334,7 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
                         <strong>Cantidad:</strong> {item.quantity} {item.quantity > 1 ? 'unidades' : 'unidad'}
                       </span>
                       <span className="photo-detail-item">
-                        <strong>Precio de venta:</strong> {symbol} {formatMoneyPLN(Number(item.quantity || 0) * Number(item.unit_price || 0) * (1 + igvFactor))}
+                        <strong>Precio de venta:</strong> {symbol} {formatMoneyPLN(total)}
                       </span>
                     </div>
                   </div>

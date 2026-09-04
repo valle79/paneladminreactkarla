@@ -197,6 +197,11 @@ CREATE INDEX IF NOT EXISTS idx_sales_deleted ON public.sales(deleted);
 CREATE INDEX IF NOT EXISTS idx_sales_created_at ON public.sales(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sales_invoice ON public.sales(invoice_type, invoice_number);
 
+ALTER TABLE public.sales
+    ADD COLUMN IF NOT EXISTS discount_type VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS discount_value NUMERIC(12, 2) DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(14, 2) DEFAULT 0 NOT NULL;
+
 -- ============================================================================
 -- TABLA: sale_items (Detalle de ventas)
 -- ============================================================================

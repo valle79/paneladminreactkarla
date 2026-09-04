@@ -20,6 +20,8 @@ const emptySale = {
   invoice_type: 'boleta',
   invoice_number: '',
   with_igv: true,
+  discount_type: '',
+  discount_value: '',
   payment_status: 'pagado',
   payment_description: '',
   payment_date: '',
@@ -29,6 +31,7 @@ const emptySale = {
 };
 
 const TYPE_ORDER = { machine: 0, repuesto: 1, service: 2, manual: 3 };
+const IGV_RATE = 0.18;
 const ITEM_TYPES = [
   { value: 'machine', label: 'Productos' },
   { value: 'repuesto', label: 'Repuestos' },
@@ -143,6 +146,9 @@ export default function Sales() {
     subtotal: Number(subtotal.toFixed(2)),
     igv: Number(igv.toFixed(2)),
     total: Number(total.toFixed(2)),
+    discount_type: form.discount_type || null,
+    discount_value: Number(form.discount_value) || 0,
+    discount_amount: Number(discountAmount.toFixed(2)),
     payment_status: form.payment_status,
     payment_description: form.payment_description || '',
     payment_date: form.payment_status === 'por_pagar' ? form.payment_date || null : null,
@@ -220,6 +226,7 @@ export default function Sales() {
         },
         advisor_name: advisor?.name,
         subtotal, igv, total,
+        discount_amount: Number(discountAmount.toFixed(2)),
         items,
         created_at: new Date().toISOString(),
       },
@@ -271,6 +278,8 @@ export default function Sales() {
       invoice_type: s.invoice_type,
       invoice_number: s.invoice_number || '',
       with_igv: !!s.with_igv,
+      discount_type: s.discount_type || '',
+      discount_value: s.discount_value ?? '',
       payment_status: s.payment_status || 'pagado',
       payment_description: s.payment_description || '',
       payment_date: s.payment_date || '',
@@ -293,12 +302,23 @@ export default function Sales() {
       .catch(() => {});
   }, [modal, cats]);
 
-  const subtotal = useMemo(
+  const brutoConIGV = useMemo(
     () => form.items.reduce((acc, i) => acc + Number(i.quantity || 0) * Number(i.unit_price || 0), 0),
     [form.items]
   );
-  const igv = form.with_igv ? subtotal * 0.18 : 0;
-  const total = subtotal + igv;
+  const subtotal = useMemo(
+    () => (form.with_igv ? brutoConIGV / (1 + IGV_RATE) : brutoConIGV),
+    [brutoConIGV, form.with_igv]
+  );
+  const igv = useMemo(() => (form.with_igv ? subtotal * IGV_RATE : 0), [subtotal, form.with_igv]);
+  const discountAmount = useMemo(() => {
+    if (!form.discount_type) return 0;
+    const v = Math.max(0, Number(form.discount_value) || 0);
+    return form.discount_type === 'porcentaje'
+      ? brutoConIGV * Math.min(v / 100, 1)
+      : Math.min(v, brutoConIGV);
+  }, [form.discount_type, form.discount_value, brutoConIGV]);
+  const total = useMemo(() => brutoConIGV - discountAmount, [brutoConIGV, discountAmount]);
 
   const setItemField = (idx, key, value) =>
     setForm((f) => ({ ...f, items: f.items.map((it, j) => (j === idx ? { ...it, [key]: value } : it)) }));
@@ -873,6 +893,9 @@ export default function Sales() {
           <input type="checkbox" checked={form.with_igv} onChange={(e) => setForm({ ...form, with_igv: e.target.checked })} />
           Con IGV (18%)
         </label>
+        <div className="text-muted" style={{ fontSize: 12, marginTop: -6, marginBottom: 12 }}>
+          El precio unitario de tus productos y repuestos ya incluye IGV; el sistema desglosa automáticamente el valor de venta y el IGV.
+        </div>
 
         <div className="field">
           <label>Items de la venta</label>
@@ -928,10 +951,43 @@ export default function Sales() {
         </div>
 
         <div className="grid-2">
-          <div className="sale-summary">
-            <div className="line"><span className="text-muted">Subtotal</span><span className="money">{fmtMoney(subtotal)}</span></div>
-            <div className="line"><span className="text-muted">IGV {form.with_igv ? '(18%)' : '(0%)'}</span><span className="money">{fmtMoney(igv)}</span></div>
-            <div className="line total"><span>Total</span><span className="money">{fmtMoney(total)}</span></div>
+          <div>
+            <div className="flex" style={{ gap: 8, marginBottom: 10 }}>
+              <select
+                className="select"
+                style={{ width: 150 }}
+                value={form.discount_type}
+                onChange={(e) => setForm({ ...form, discount_type: e.target.value })}
+              >
+                <option value="">Sin descuento</option>
+                <option value="porcentaje">Porcentaje (%)</option>
+                <option value="monto">Monto (S/)</option>
+              </select>
+              {form.discount_type && (
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder={form.discount_type === 'porcentaje' ? 'Ej. 10' : 'Ej. 50'}
+                  value={form.discount_value}
+                  onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
+                />
+              )}
+              {discountAmount > 0 && (
+                <span className="text-muted" style={{ alignSelf: 'center', fontSize: 12.5 }}>
+                  Descuento: −{fmtMoney(discountAmount)}
+                </span>
+              )}
+            </div>
+            <div className="sale-summary">
+              <div className="line"><span className="text-muted">Valor de venta</span><span className="money">{fmtMoney(subtotal)}</span></div>
+              <div className="line"><span className="text-muted">IGV {form.with_igv ? '(18%)' : '(0%)'}</span><span className="money">{fmtMoney(igv)}</span></div>
+              {discountAmount > 0 && (
+                <div className="line"><span className="text-muted">Descuento</span><span className="money text-danger">−{fmtMoney(discountAmount)}</span></div>
+              )}
+              <div className="line total"><span>Total</span><span className="money">{fmtMoney(total)}</span></div>
+            </div>
           </div>
           {paymentFields}
         </div>
@@ -1010,8 +1066,11 @@ export default function Sales() {
             </div>
 
             <div className="sale-summary">
-              <div className="line"><span className="text-muted">Subtotal</span><span className="money">{fmtMoney(view.subtotal)}</span></div>
+              <div className="line"><span className="text-muted">Valor de venta</span><span className="money">{fmtMoney(view.subtotal)}</span></div>
               <div className="line"><span className="text-muted">IGV</span><span className="money">{fmtMoney(view.igv)}</span></div>
+              {Number(view.discount_amount || 0) > 0 && (
+                <div className="line"><span className="text-muted">Descuento</span><span className="money text-danger">−{fmtMoney(view.discount_amount)}</span></div>
+              )}
               <div className="line total"><span>Total</span><span className="money">{fmtMoney(view.total)}</span></div>
               {view.amount_paid != null && (
                 <div className="line"><span className="text-muted">Abonado</span><span className="money">{fmtMoney(view.amount_paid)}</span></div>

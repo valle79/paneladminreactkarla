@@ -21,3 +21,13 @@ ALTER TABLE public.spare_parts
 -- Índices para filtrado por estado
 CREATE INDEX IF NOT EXISTS idx_machine_products_status ON public.machine_products(status);
 CREATE INDEX IF NOT EXISTS idx_spare_parts_status ON public.spare_parts(status);
+
+-- ============================================================================
+--  Descuentos en ventas
+--  discount_type: 'porcentaje' | 'monto' | NULL (sin descuento)
+--  Idempotente: se puede re-ejecutar sin errores.
+-- ============================================================================
+ALTER TABLE public.sales
+    ADD COLUMN IF NOT EXISTS discount_type VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS discount_value NUMERIC(12, 2) DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(14, 2) DEFAULT 0 NOT NULL;
