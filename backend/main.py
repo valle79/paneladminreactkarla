@@ -5,6 +5,8 @@ FastAPI + PostgreSQL (Neon)
 Ejecutar:  uvicorn main:app --reload --port 8000
 """
 
+import csv
+import io
 import os
 import uuid
 from datetime import date
@@ -288,19 +290,27 @@ class SoftDeleteMixin:
                 row[c] = db.from_json(row[c])
         return row
 
-    def list(self, include_deleted=False, page: int = 1, limit: int = 50):
-        wh = "" if include_deleted else "WHERE NOT deleted"
+    def list(self, include_deleted=False, page: int = 1, limit: int = 50, extra_where: str = "", extra_params: list | None = None):
+        conditions = []
+        params = []
+        if not include_deleted:
+            conditions.append("NOT deleted")
+        if extra_where:
+            conditions.append(extra_where)
+            if extra_params:
+                params.extend(extra_params)
+        wh = "WHERE " + " AND ".join(conditions) if conditions else ""
         
-        # Obtener total
-        total = get_total_count(self.table, "" if include_deleted else "NOT deleted")
+        total_row = db.fetch_one(f"SELECT COUNT(*)::int as total FROM {self.table} {wh}", params or None)
+        total = total_row["total"] if total_row else 0
         
-        # Consulta paginada
         page = max(1, page)
         limit = min(max(1, limit), 100)
         offset = (page - 1) * limit
         
         rows = db.fetch_all(
-            f"SELECT * FROM {self.table} {wh} ORDER BY id DESC LIMIT {limit} OFFSET {offset}"
+            f"SELECT * FROM {self.table} {wh} ORDER BY id DESC LIMIT {limit} OFFSET {offset}",
+            params or None
         )
         
         items = [self.hydrate(dict(r)) for r in rows]
@@ -599,8 +609,16 @@ clients_crud = ClientMixin()
 
 
 @app.get("/api/clients")
-def list_clients(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("CLIENTS_VIEW"))):
-    return _conn_or_400(lambda: clients_crud.list(include_deleted, page, limit))
+def list_clients(include_deleted: bool = False, page: int = 1, limit: int = 50,
+                 phone: str = "", departamento: str = "", provincia: str = "", distrito: str = "",
+                 _: dict = Depends(require_permission("CLIENTS_VIEW"))):
+    extra, eparams = [], []
+    if phone:
+        extra.append("phone ILIKE %s"); eparams.append(f"%{phone}%")
+    if departamento:
+        extra.append("address ILIKE %s"); eparams.append(f"%{departamento}%")
+    ew = " AND ".join(extra) if extra else ""
+    return _conn_or_400(lambda: clients_crud.list(include_deleted, page, limit, ew, eparams or None))
 
 
 @app.post("/api/clients")
@@ -631,6 +649,33 @@ def restore_client(item_id: int, actor: dict = Depends(require_permission("CLIEN
     return res
 
 
+@app.post("/api/clients/import")
+def import_clients(payload: list[dict], actor: dict = Depends(require_permission("CLIENTS_CREATE"))):
+    created, errors = [], []
+    for i, row in enumerate(payload):
+        names = (row.get("names") or "").strip()
+        phone = (row.get("phone") or "").strip()
+        if not names:
+            errors.append({"row": i + 1, "error": "Nombre es obligatorio"})
+            continue
+        if not phone:
+            errors.append({"row": i + 1, "error": "Teléfono es obligatorio"})
+            continue
+        try:
+            item = clients_crud.create({
+                "dni": (row.get("dni") or "").strip(),
+                "names": names,
+                "last_names": (row.get("last_names") or "").strip(),
+                "address": (row.get("address") or "").strip(),
+                "phone": phone,
+            })
+            created.append(item)
+            rbac.audit(actor["id"], actor["email"], "create", "clients", item["id"], {"dni": item.get("dni"), "import": True})
+        except Exception as e:
+            errors.append({"row": i + 1, "error": str(e)})
+    return {"created": len(created), "errors": errors, "total": len(payload)}
+
+
 # ============================================================================
 # CLIENTES RUC (Empresas)
 # ============================================================================
@@ -643,8 +688,18 @@ clients_ruc_crud = ClientRucMixin()
 
 
 @app.get("/api/clients-ruc")
-def list_clients_ruc(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("CLIENTS_VIEW"))):
-    return _conn_or_400(lambda: clients_ruc_crud.list(include_deleted, page, limit))
+def list_clients_ruc(include_deleted: bool = False, page: int = 1, limit: int = 50,
+                     departamento: str = "", provincia: str = "", distrito: str = "",
+                     _: dict = Depends(require_permission("CLIENTS_VIEW"))):
+    extra, eparams = [], []
+    if departamento:
+        extra.append("departamento ILIKE %s"); eparams.append(f"%{departamento}%")
+    if provincia:
+        extra.append("provincia ILIKE %s"); eparams.append(f"%{provincia}%")
+    if distrito:
+        extra.append("distrito ILIKE %s"); eparams.append(f"%{distrito}%")
+    ew = " AND ".join(extra) if extra else ""
+    return _conn_or_400(lambda: clients_ruc_crud.list(include_deleted, page, limit, ew, eparams or None))
 
 
 @app.post("/api/clients-ruc")
@@ -673,6 +728,40 @@ def restore_client_ruc(item_id: int, actor: dict = Depends(require_permission("C
     res = _conn_or_400(lambda: clients_ruc_crud.restore(item_id))
     rbac.audit(actor["id"], actor["email"], "restore", "clients_ruc", item_id, {})
     return res
+
+
+@app.post("/api/clients-ruc/import")
+def import_clients_ruc(payload: list[dict], actor: dict = Depends(require_permission("CLIENTS_CREATE"))):
+    created, errors = [], []
+    for i, row in enumerate(payload):
+        ruc = (row.get("ruc") or "").strip()
+        razonsocial = (row.get("razonsocial") or "").strip()
+        telefonos = (row.get("telefonos") or "").strip()
+        if not ruc or len(ruc) != 11:
+            errors.append({"row": i + 1, "error": "RUC inválido (debe tener 11 dígitos)"})
+            continue
+        if not razonsocial:
+            errors.append({"row": i + 1, "error": "Razón social es obligatoria"})
+            continue
+        if not telefonos:
+            errors.append({"row": i + 1, "error": "Teléfono es obligatorio"})
+            continue
+        try:
+            item = clients_ruc_crud.create({
+                "ruc": ruc,
+                "razonsocial": razonsocial,
+                "nombrecomercial": (row.get("nombrecomercial") or "").strip(),
+                "telefonos": [t.strip() for t in telefonos.replace(";", ",").split(",") if t.strip()],
+                "direccion": (row.get("direccion") or "").strip(),
+                "departamento": (row.get("departamento") or "").strip(),
+                "provincia": (row.get("provincia") or "").strip(),
+                "distrito": (row.get("distrito") or "").strip(),
+            })
+            created.append(item)
+            rbac.audit(actor["id"], actor["email"], "create", "clients_ruc", item["id"], {"ruc": item.get("ruc"), "import": True})
+        except Exception as e:
+            errors.append({"row": i + 1, "error": str(e)})
+    return {"created": len(created), "errors": errors, "total": len(payload)}
 
 
 # ============================================================================

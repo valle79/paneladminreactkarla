@@ -22,6 +22,7 @@ import {
   Factory,
   FilePlus2,
   FileText,
+  Filter,
   Globe,
   Inbox,
   Info,
@@ -84,6 +85,7 @@ const MAP = {
   lock: Lock,
   visible: Eye,
   hide: EyeOff,
+  eye: Eye,
   info: Info,
   'high-priority': TriangleAlert,
   menu: Menu,
@@ -106,6 +108,7 @@ const MAP = {
   factory: Factory,
   arrow: ArrowRight,
   ruler: Ruler,
+  filter: Filter,
   'security-checked': ShieldCheck,
   whatsapp: Whatsapp,
 };

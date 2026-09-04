@@ -1913,6 +1913,70 @@ button { touch-action: manipulation; }
   .proforma-photo-frame { min-height: 280px; }
 }
 
+/* ---------- Import CSV ---------- */
+.import-dropzone {
+  border: 2px dashed #b9d6c3; border-radius: 12px;
+  background: var(--g-softer); padding: 28px 16px;
+  text-align: center; cursor: pointer; transition: all 0.15s;
+  color: var(--muted); font-size: 13px;
+}
+.import-dropzone:hover, .import-dropzone.drag {
+  border-color: var(--g-primary); background: var(--g-soft);
+}
+.import-dropzone svg { color: var(--g-primary); margin-bottom: 6px; }
+.import-dropzone b { color: var(--g-dark); font-size: 14px; }
+.import-dropzone p { margin: 4px 0 0; font-size: 12px; color: var(--faint); }
+
+.import-preview-wrap {
+  max-height: 280px; overflow: auto; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); margin-top: 12px;
+}
+.import-preview-wrap table {
+  width: 100%; border-collapse: collapse; font-size: 12.5px;
+}
+.import-preview-wrap th {
+  text-align: left; padding: 8px 12px; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--g-dark); font-weight: 700; background: var(--g-soft);
+  border-bottom: 2px solid #cfe7d6; position: sticky; top: 0; z-index: 2;
+}
+.import-preview-wrap td {
+  padding: 7px 12px; border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.import-preview-wrap tr.import-row-error { background: #fef2f2; }
+.import-preview-wrap tr.import-row-error td { color: var(--danger); }
+.import-preview-wrap .row-num {
+  color: var(--faint); font-size: 11px; min-width: 28px; text-align: center;
+}
+.import-preview-wrap .cell-ok { color: var(--g-primary); }
+.import-preview-wrap .cell-err { color: var(--danger); font-weight: 600; }
+
+.import-progress {
+  height: 6px; border-radius: 3px; background: var(--line);
+  margin-top: 14px; overflow: hidden;
+}
+.import-progress-bar {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--g-dark), var(--g-primary));
+  transition: width 0.35s ease;
+}
+
+.import-summary {
+  display: flex; gap: 20px; margin-top: 14px; font-size: 13px;
+}
+.import-summary .stat {
+  display: flex; align-items: center; gap: 6px; font-weight: 600;
+}
+.import-summary .stat.ok { color: var(--g-primary); }
+.import-summary .stat.err { color: var(--danger); }
+
+.import-hint {
+  background: var(--y-soft); border: 1px solid #f0d97a; border-radius: 8px;
+  padding: 10px 14px; margin-top: 12px; font-size: 12.5px; color: #7a6200;
+}
+.import-hint b { color: #5c4300; }
+
 /* ---------- Safe areas y detalles de navegación ---------- */
 @media (max-width: 720px) {
   .topbar {
