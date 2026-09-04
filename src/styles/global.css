@@ -315,6 +315,24 @@ table.data tbody tr:last-child td { border-bottom: none; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 
+/* ---------- Detail view (ficha) ---------- */
+.detail-item {
+  background: var(--g-softer);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  min-width: 0;
+}
+.detail-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); margin-bottom: 3px;
+}
+.detail-value {
+  font-size: 13px; font-weight: 600; color: var(--ink);
+  display: flex; align-items: center; gap: 6px;
+  word-break: break-word; min-width: 0;
+}
+
 /* ---------- Toasts ---------- */
 .toast-stack {
   position: fixed; top: 18px; right: 18px; z-index: 400;

@@ -287,6 +287,7 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
   const symbol = moneySymbol(o.moneda);
   const absImg = (u) => (u && /^https?:\/\//.test(u) ? u : API_URL + u);
   const itemsConFoto = (sale.items || []).filter((it) => it.image_url);
+  const igvFactor = sub > 0 ? (igv / sub) : 0;
 
   const pagesTotal = itemsConFoto.length > 0 ? 2 : 1;
 
@@ -332,7 +333,7 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
                         <strong>Cantidad:</strong> {item.quantity} {item.quantity > 1 ? 'unidades' : 'unidad'}
                       </span>
                       <span className="photo-detail-item">
-                        <strong>P. Unit:</strong> {symbol} {formatMoneyPLN(item.unit_price)}
+                        <strong>Precio de venta:</strong> {symbol} {formatMoneyPLN(Number(item.quantity || 0) * Number(item.unit_price || 0) * (1 + igvFactor))}
                       </span>
                     </div>
                   </div>

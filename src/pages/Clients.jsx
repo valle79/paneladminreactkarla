@@ -496,7 +496,7 @@ function DniTab({ reloadKey }) {
   };
 
   const save = async () => {
-    if (!form.dni || !/^\d{8}$/.test(form.dni)) return toast.warning('El DNI debe tener 8 digitos');
+    if (form.dni && !/^\d{8}$/.test(form.dni)) return toast.warning('El DNI debe tener 8 digitos');
     if (!form.names.trim()) return toast.warning('El nombre es obligatorio');
     setBusy(true);
     try {
@@ -534,10 +534,6 @@ function DniTab({ reloadKey }) {
 
   return (
     <>
-      <div className="flex" style={{ marginBottom: 16 }}>
-        <label className="check"><input type="checkbox" checked={showDeleted} onChange={(e) => { setShowDeleted(e.target.checked); setPage(1); }} /> Mostrar inactivos</label>
-      </div>
-
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '10px 16px', fontSize: 13 }}>
           <span style={{ fontWeight: 600, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="filter" size={14} /> Filtros:</span>
@@ -612,9 +608,9 @@ function DniTab({ reloadKey }) {
         }
       >
         <div className="field">
-          <label>DNI <span className="req">*</span></label>
+          <label>DNI</label>
           <div className="flex" style={{ gap: 8 }}>
-            <input className="input" maxLength={8} placeholder="8 digitos" value={form.dni} onChange={(e) => setForm({ ...form, dni: e.target.value.replace(/\D/g, '') })} />
+            <input className="input" maxLength={8} placeholder="8 digitos (opcional)" value={form.dni} onChange={(e) => setForm({ ...form, dni: e.target.value.replace(/\D/g, '') })} />
             <button type="button" className="btn btn-yellow" style={{ minWidth: 120, flexShrink: 0 }} onClick={consultarDni} disabled={consulting}>
               {consulting ? <span className="spinner" /> : <Icon name="checked-user-male" size={15} />} Consultar
             </button>
@@ -632,17 +628,55 @@ function DniTab({ reloadKey }) {
         <div className="hint">El telefono permite enviar los documentos (boleta, factura, proforma) al cliente por WhatsApp.</div>
       </Modal>
 
-      <Modal open={!!detailRow} onClose={() => setDetailRow(null)} title="Detalle del cliente" icon={<Icon name="eye" size={18} />}>
+      <Modal open={!!detailRow} onClose={() => setDetailRow(null)} title="Ficha del cliente" icon={<Icon name="user-male-circle" size={18} />}>
         {detailRow && (
           <div style={{ fontSize: 13 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
-              <div><span style={{ color: 'var(--muted)' }}>DNI:</span> <b>{detailRow.dni || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Nombre:</span> <b>{detailRow.names}</b></div>
-              {detailRow.last_names && <div><span style={{ color: 'var(--muted)' }}>Apellidos:</span> <b>{detailRow.last_names}</b></div>}
-              <div><span style={{ color: 'var(--muted)' }}>Telefono:</span> <b>{detailRow.phone || '—'}</b></div>
-              <div style={{ gridColumn: '1 / -1' }}><span style={{ color: 'var(--muted)' }}>Direccion:</span> <b>{detailRow.address || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Registro:</span> <b>{fmtDate(detailRow.created_at)}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Estado:</span> <span className={`chip ${detailRow.deleted ? 'deleted' : ''}`} style={{ marginLeft: 4 }}>{detailRow.deleted ? 'Inactivo' : 'Activo'}</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+                background: 'linear-gradient(135deg, #1eaa47, #147a33)',
+                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 3px 8px rgba(30,170,71,.25)',
+              }}>
+                <Icon name="user-male-circle" size={24} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--ink)' }}>{detailRow.names} {detailRow.last_names}</div>
+                <div style={{ color: 'var(--muted)', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  {detailRow.dni && <span className="chip" style={{ margin: 0 }}>{detailRow.dni}</span>}
+                  <span>Cliente DNI</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)', marginBottom: 12 }}>Contacto</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="detail-item">
+                  <div className="detail-label">Telefono / WhatsApp</div>
+                  <div className="detail-value" style={{ color: detailRow.phone ? '#1eaa47' : 'var(--muted)' }}>
+                    <Icon name="phone" size={13} /> {detailRow.phone || '—'}
+                  </div>
+                </div>
+                <div className="detail-item">
+                  <div className="detail-label">Direccion</div>
+                  <div className="detail-value">{detailRow.address || '—'}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 14 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)', marginBottom: 12 }}>Informacion</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="detail-item">
+                  <div className="detail-label">Registro</div>
+                  <div className="detail-value">{fmtDate(detailRow.created_at)}</div>
+                </div>
+                <div className="detail-item">
+                  <div className="detail-label">ID</div>
+                  <div className="detail-value">{detailRow.id}</div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -794,10 +828,6 @@ function RucTab({ reloadKey }) {
 
   return (
     <>
-      <div className="flex" style={{ marginBottom: 16 }}>
-        <label className="check"><input type="checkbox" checked={showDeleted} onChange={(e) => { setShowDeleted(e.target.checked); setPage(1); }} /> Mostrar inactivos</label>
-      </div>
-
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '10px 16px', fontSize: 13 }}>
           <span style={{ fontWeight: 600, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="filter" size={14} /> Filtros:</span>
@@ -929,23 +959,73 @@ function RucTab({ reloadKey }) {
         </div>
       </Modal>
 
-      <Modal open={!!detailRow} onClose={() => setDetailRow(null)} title="Detalle de la empresa" icon={<Icon name="building" size={18} />} size="lg">
+      <Modal open={!!detailRow} onClose={() => setDetailRow(null)} title="Ficha de la empresa" icon={<Icon name="building" size={18} />} size="lg">
         {detailRow && (
           <div style={{ fontSize: 13 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px 20px' }}>
-              <div><span style={{ color: 'var(--muted)' }}>RUC:</span> <b>{detailRow.ruc}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Razon social:</span> <b>{detailRow.razonsocial}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Nombre comercial:</span> <b>{detailRow.nombrecomercial || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Telefonos:</span> <b>{(Array.isArray(detailRow.telefonos) ? detailRow.telefonos.join(', ') : detailRow.telefonos) || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Estado:</span> <b>{detailRow.estado || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Condicion:</span> <b>{detailRow.condicion || '—'}</b></div>
-              <div style={{ gridColumn: '1 / -1' }}><span style={{ color: 'var(--muted)' }}>Direccion:</span> <b>{detailRow.direccion || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Departamento:</span> <b>{detailRow.departamento || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Provincia:</span> <b>{detailRow.provincia || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Distrito:</span> <b>{detailRow.distrito || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Ubigeo:</span> <b>{detailRow.ubigeo || '—'}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Registro:</span> <b>{fmtDate(detailRow.created_at)}</b></div>
-              <div><span style={{ color: 'var(--muted)' }}>Agente retencion:</span> <b>{detailRow.es_agente_retencion ? 'Si' : 'No'}</b></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+                background: 'linear-gradient(135deg, #2f6bff, #1b3fa8)',
+                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 3px 8px rgba(47,107,255,.25)',
+              }}>
+                <Icon name="building" size={24} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--ink)', lineHeight: 1.3 }}>{detailRow.razonsocial}</div>
+                <div style={{ color: 'var(--muted)', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  {detailRow.ruc && <span className="chip" style={{ margin: 0 }}>{detailRow.ruc}</span>}
+                  <span>Cliente RUC</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)', marginBottom: 12 }}>Contacto</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="detail-item">
+                  <div className="detail-label">Telefonos</div>
+                  <div className="detail-value" style={{ color: (Array.isArray(detailRow.telefonos) ? detailRow.telefonos.join('') : detailRow.telefonos) ? '#1eaa47' : 'var(--muted)' }}>
+                    <Icon name="phone" size={13} /> {(Array.isArray(detailRow.telefonos) ? detailRow.telefonos.join(', ') : detailRow.telefonos) || '—'}
+                  </div>
+                </div>
+                <div className="detail-item">
+                  <div className="detail-label">Nombre comercial</div>
+                  <div className="detail-value">{detailRow.nombrecomercial || '—'}</div>
+                </div>
+                <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
+                  <div className="detail-label">Direccion</div>
+                  <div className="detail-value">{detailRow.direccion || '—'}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 14 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)', marginBottom: 12 }}>Ubicacion</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div className="detail-item"><div className="detail-label">Departamento</div><div className="detail-value">{detailRow.departamento || '—'}</div></div>
+                <div className="detail-item"><div className="detail-label">Provincia</div><div className="detail-value">{detailRow.provincia || '—'}</div></div>
+                <div className="detail-item"><div className="detail-label">Distrito</div><div className="detail-value">{detailRow.distrito || '—'}</div></div>
+                <div className="detail-item"><div className="detail-label">Ubigeo</div><div className="detail-value">{detailRow.ubigeo || '—'}</div></div>
+                <div className="detail-item"><div className="detail-label">Estado SUNAT</div><div className="detail-value">{detailRow.estado || '—'}</div></div>
+                <div className="detail-item"><div className="detail-label">Condicion</div><div className="detail-value">{detailRow.condicion || '—'}</div></div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 14 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)', marginBottom: 12 }}>Informacion</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="detail-item"><div className="detail-label">Registro</div><div className="detail-value">{fmtDate(detailRow.created_at)}</div></div>
+                <div className="detail-item">
+                  <div className="detail-label">Tributos</div>
+                  <div className="detail-value">
+                    {(detailRow.es_agente_retencion && detailRow.es_buen_contribuyente) ? 'Agente retencion y buen contribuyente'
+                      : detailRow.es_agente_retencion ? 'Agente de retencion'
+                      : detailRow.es_buen_contribuyente ? 'Buen contribuyente'
+                      : '—'}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
