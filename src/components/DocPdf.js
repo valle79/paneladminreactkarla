@@ -8,8 +8,9 @@ import html2canvas from 'html2canvas';
 
 const A4_W = 210; // mm
 const A4_H = 297; // mm
-// Relación de aspecto A4 (alto = ancho * A4_H/A4_W) para calcular bandas.
-const A4_RATIO = A4_H / A4_W;
+// Relaciones de aspecto A4 para calcular bandas (alto = ancho * ratio).
+const A4_RATIO = A4_H / A4_W;            // vertical: 1.414
+const A4_LANDSCAPE_RATIO = A4_W / A4_H;  // horizontal: 0.707
 
 async function capture(el) {
   return html2canvas(el, {
@@ -22,11 +23,11 @@ async function capture(el) {
 }
 
 /* Divide un canvas alto en bandas con la proporción A4 (pag. dinámica). */
-function slicePages(canvas) {
+function slicePages(canvas, ratio = A4_RATIO) {
   const pages = [];
   const w = canvas.width;
   const h = canvas.height;
-  const pageH = Math.round(w * A4_RATIO);
+  const pageH = Math.round(w * ratio);
   const count = Math.max(1, Math.ceil(h / pageH));
   for (let i = 0; i < count; i++) {
     const y = i * pageH;
@@ -44,17 +45,36 @@ function slicePages(canvas) {
   return pages.length ? pages : [canvas];
 }
 
-function addPageImage(pdf, page) {
+function addPageImage(pdf, page, wMax = A4_W, hMax = A4_H) {
   const pw = page.width;
   const ph = page.height;
-  let w = A4_W - 8;
+  let w = wMax - 8;
   let h = (ph * w) / pw;
-  if (h > A4_H - 8) {
-    const f = (A4_H - 8) / h;
+  if (h > hMax - 8) {
+    const f = (hMax - 8) / h;
     w *= f;
-    h = A4_H - 8;
+    h = hMax - 8;
   }
-  pdf.addImage(page.toDataURL('image/jpeg', 0.93), 'JPEG', (A4_W - w) / 2, (A4_H - h) / 2, w, h);
+  pdf.addImage(page.toDataURL('image/jpeg', 0.93), 'JPEG', (wMax - w) / 2, (hMax - h) / 2, w, h);
+}
+
+/* Genera un PDF A4 (vertical u horizontal) a partir de cualquier elemento HTML. */
+export async function buildElementPdfBlob(element, { orientation = 'portrait' } = {}) {
+  const landscape = orientation === 'landscape';
+  const wMax = landscape ? A4_H : A4_W;
+  const hMax = landscape ? A4_W : A4_H;
+  const ratio = landscape ? A4_LANDSCAPE_RATIO : A4_RATIO;
+
+  const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4', compress: true });
+  const pages = slicePages(await capture(element), ratio);
+
+  pages.forEach((page, i) => {
+    if (i > 0) pdf.addPage();
+    addPageImage(pdf, page, wMax, hMax);
+  });
+  if (pages.length === 0) pdf.addPage();
+
+  return pdf.output('blob');
 }
 
 export async function buildDocumentPdfBlob(mainEl, photosEl) {

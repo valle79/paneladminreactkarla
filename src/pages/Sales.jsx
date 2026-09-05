@@ -4,7 +4,8 @@ import { api, errMsg, uploadFile } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
 import ProformaModal, { ProformaDocument } from '../components/Proforma';
-import { buildDocumentPdfBlob } from '../components/DocPdf';
+import { buildDocumentPdfBlob, buildElementPdfBlob } from '../components/DocPdf';
+import SalesReport from '../components/SalesReport';
 import {
   Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, fmtMoney, fmtDateTime, fmtDate,
   StatusBadge, DocTypeBadge, InvoiceBadge,
@@ -12,6 +13,7 @@ import {
 import { Pagination } from '../components/Pagination';
 import { COMPANY, formatDocNumber } from '../config';
 import { useAuth } from '../auth';
+import { exportSalesToExcel, filterBySearch, SALE_SEARCH_KEYS, downloadBlob, timestampName } from '../lib/exportSales';
 
 const emptySale = {
   client_type: 'dni',
@@ -89,7 +91,7 @@ const waDocName = (s) =>
 
 export default function Sales() {
   const toast = useToast();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { ask, ConfirmDialog } = useConfirm();
   const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(false);
@@ -115,6 +117,10 @@ export default function Sales() {
   const [quickBusy, setQuickBusy] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState('');
   const [phoneBusy, setPhoneBusy] = useState(false);
+  const [excelBusy, setExcelBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [report, setReport] = useState(null);
+  const reportRef = useRef(null);
 
   const load = () => {
     setFailed(false);
@@ -124,6 +130,64 @@ export default function Sales() {
     api.get(`/sales?${params}`).then((r) => { setRows(r.data.items); setPagination(r.data.pagination); }).catch((e) => { setFailed(true); toast.error(errMsg(e)); });
   };
   useEffect(() => { load(); }, [page, dateFrom, dateTo]);
+
+  const fetchFilteredSales = async () => {
+    const EXPORT_LIMIT = 100;
+    const params = new URLSearchParams({ page: '1', limit: String(EXPORT_LIMIT) });
+    if (dateFrom) params.set('date_from', dateFrom);
+    if (dateTo) params.set('date_to', dateTo);
+
+    const first = await api.get(`/sales?${params}`);
+    const all = [...first.data.items];
+    const total = first.data.pagination?.total || 0;
+    const pages = Math.ceil(total / EXPORT_LIMIT);
+    for (let p = 2; p <= pages; p++) {
+      params.set('page', String(p));
+      const next = await api.get(`/sales?${params}`);
+      all.push(...next.data.items);
+    }
+
+    return filterBySearch(all, q);
+  };
+
+  const exportExcel = async () => {
+    setExcelBusy(true);
+    try {
+      const selected = await fetchFilteredSales();
+      if (selected.length === 0) {
+        toast.warning('No hay ventas que coincidan con los filtros actuales');
+        return;
+      }
+      const count = exportSalesToExcel(selected);
+      toast.success(`${count} venta${count === 1 ? '' : 's'} exportada${count === 1 ? '' : 's'} a Excel`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setExcelBusy(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    setPdfBusy(true);
+    try {
+      const selected = await fetchFilteredSales();
+      if (selected.length === 0) {
+        toast.warning('No hay ventas que coincidan con los filtros actuales');
+        return;
+      }
+      setReport(selected);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const blob = await buildElementPdfBlob(reportRef.current, { orientation: 'landscape' });
+      downloadBlob(blob, `reporte_ventas_${timestampName()}.pdf`);
+      const n = selected.length;
+      toast.success(`${n} venta${n === 1 ? '' : 's'} exportada${n === 1 ? '' : 's'} a PDF`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setReport(null);
+      setPdfBusy(false);
+    }
+  };
 
   const reloadList = useListReload(page, setPage, load, editingId);
 
@@ -227,6 +291,16 @@ export default function Sales() {
         advisor_name: advisor?.name,
         subtotal, igv, total,
         discount_amount: Number(discountAmount.toFixed(2)),
+        payment_status: form.payment_status,
+        payment_date: form.payment_status === 'pagado'
+          ? (form.payment_date || new Date().toISOString().slice(0, 10))
+          : form.payment_status === 'por_pagar'
+            ? form.payment_date || null
+            : null,
+        amount_paid: form.payment_status === 'a_cuenta' ? Number(form.amount_paid) : null,
+        amount_pending: form.payment_status === 'a_cuenta' ? Number((total - Number(form.amount_paid)).toFixed(2)) : null,
+        pending_payment_date: form.payment_status === 'a_cuenta' ? form.pending_payment_date || null : null,
+        payment_description: form.payment_description || '',
         items,
         created_at: new Date().toISOString(),
       },
@@ -251,14 +325,7 @@ export default function Sales() {
     }
   };
 
-  const { q, setQ, filtered } = useSearch(rows || [], [
-    (r) => (r.invoice_number ? String(r.invoice_number) : ''),
-    (r) => r.invoice_type,
-    (r) => r.client?.names || r.client?.razonsocial || '',
-    (r) => r.client?.dni || r.client?.ruc || '',
-    (r) => r.advisor?.name || '',
-    (r) => (r.total ? String(r.total) : ''),
-  ]);
+  const { q, setQ, filtered } = useSearch(rows || [], SALE_SEARCH_KEYS);
 
   const openAdd = async () => {
     setEditingId(null);
@@ -688,6 +755,14 @@ export default function Sales() {
               </button>
             )}
           </div>
+          <button type="button" className="btn btn-outline btn-sm" onClick={exportExcel} disabled={excelBusy} title="Exporta a Excel todas las ventas que coinciden con los filtros actuales">
+            {excelBusy ? <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} /> : <Icon name="download" size={14} />}
+            Exportar Excel
+          </button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={exportPdf} disabled={pdfBusy} title="Genera un reporte PDF con las ventas que coinciden con los filtros actuales">
+            {pdfBusy ? <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} /> : <Icon name="document" size={14} />}
+            Reporte PDF
+          </button>
           <span className="pill-count">{filtered.length} ventas</span>
         </Toolbar>
         <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--line)', borderRadius: 0 }}>
@@ -1090,6 +1165,13 @@ export default function Sales() {
 
       {ConfirmDialog}
 
+      {/* Reporte PDF (renderizado fuera de pantalla para capturarlo a canvas) */}
+      {report && (
+        <div className="report-offscreen" aria-hidden="true">
+          <SalesReport ref={reportRef} sales={report} dateFrom={dateFrom} dateTo={dateTo} q={q} user={user} />
+        </div>
+      )}
+
       {/* Editor de características del item */}
       <Modal
         open={specIdx !== null}
@@ -1143,7 +1225,7 @@ export default function Sales() {
           style={{ position: 'fixed', top: 0, left: -12000, width: 794, zIndex: -1, pointerEvents: 'none', background: '#fff' }}
           aria-hidden="true"
         >
-          <ProformaDocument ref={docRef} sale={waSale} />
+          <ProformaDocument ref={docRef} sale={waSale} user={user} />
         </div>
       )}
     </>

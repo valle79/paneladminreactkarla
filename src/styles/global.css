@@ -1583,6 +1583,78 @@ table.data tbody tr:last-child td { border-bottom: none; }
 }
 
 /* ---------- Varios ---------- */
+
+/* ============ REPORTE DE VENTAS (A4 horizontal, para export PDF) ============ */
+.report-offscreen {
+  position: fixed;
+  top: 0;
+  left: -20000px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.sales-report {
+  width: 1123px;
+  box-sizing: border-box;
+  background: #ffffff;
+  padding: 30px 34px;
+  font-family: var(--font-main), Arial, sans-serif;
+  color: #1c2b21;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.sr-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.sr-brand { display: flex; align-items: center; gap: 14px; }
+.sr-logo { width: 64px; height: auto; border-radius: 10px; }
+.sr-name { font-family: var(--font-head); font-size: 21px; font-weight: 800; color: #12291e; letter-spacing: 0.3px; text-transform: uppercase; }
+.sr-meta-line { font-size: 11.5px; color: #5a6b60; font-weight: 600; }
+.sr-title-box { text-align: right; }
+.sr-title { font-family: var(--font-head); font-size: 24px; font-weight: 800; color: #1f5e3f; text-transform: uppercase; letter-spacing: 0.5px; }
+.sr-subtitle { font-size: 11.5px; color: #5a6b60; font-weight: 600; margin-top: 2px; }
+.sr-rule { height: 3px; background: linear-gradient(90deg, #1f5e3f, #7db892); border-radius: 2px; margin-bottom: 14px; }
+
+.sr-meta { display: flex; gap: 10px; margin: 12px 0 0; }
+.sr-meta-item { flex: 1; background: #f0f5f1; border: 1px solid #e0e8e2; border-radius: 10px; padding: 9px 14px; }
+.sr-meta-item span { display: block; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #7d8a81; }
+.sr-meta-item b { font-size: 13px; font-weight: 800; color: #12291e; }
+
+.sr-table-wrap { border: 1px solid #e2e9e4; border-radius: 12px; overflow: hidden; }
+.sr-table { width: 100%; border-collapse: collapse; }
+.sr-table th { background: #1f5e3f; color: #fff; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; padding: 10px; text-align: left; }
+.sr-table th.num, .sr-table td.num { text-align: right; }
+.sr-table td { font-size: 11.5px; padding: 8px 10px; border-bottom: 1px solid #eef2ef; vertical-align: middle; }
+.sr-table tbody tr:nth-child(even) { background: #f6faf7; }
+.sr-table tbody tr:last-child td { border-bottom: none; }
+.sr-table .sr-doc { font-weight: 700; color: #173f2a; white-space: nowrap; }
+.sr-table .sr-client { font-weight: 600; }
+.sr-table .sr-sub { font-size: 10.5px; color: #8a9690; font-weight: 500; }
+.sr-table table .sr-types { min-width: 84px; }
+.sr-items { min-width: 200px; }
+.sr-item { font-size: 11px; line-height: 1.45; color: #38503f; }
+.sr-item + .sr-item { margin-top: 3px; }
+.sr-item-type { display: inline-block; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; color: #1f5e3f; background: #e8f1ea; border: 1px solid #d3e7d9; border-radius: 999px; padding: 0 6px; }
+.sr-item-type + .sr-item-type { margin-top: 3px; }
+.sr-table .num { font-variant-numeric: tabular-nums; }
+.sr-table .sr-total { font-weight: 800; color: #12291e; }
+.sr-table tfoot td { background: #edf5ef; font-weight: 800; color: #12291e; border-top: 2px solid #1f5e3f; padding: 10px; font-size: 11.5px; }
+.sr-table tfoot .num { font-variant-numeric: tabular-nums; }
+
+.sr-badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; }
+.sr-badge-paid { background: #e6f2ea; color: #1e7a44; border: 1px solid #bfe0cc; }
+.sr-badge-partial { background: #fdf3e0; color: #9a6b1f; border: 1px solid #ecd39e; }
+.sr-badge-pending { background: #fdeaea; color: #b23c3c; border: 1px solid #eec2c2; }
+
+.sr-foot { margin-top: 18px; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+.sr-foot-note { font-size: 10.5px; color: #7d8a81; font-weight: 600; max-width: 420px; }
+.sr-sign { text-align: right; border-top: 2px solid #1f5e3f; padding-top: 8px; min-width: 300px; }
+.sr-sign-name { font-family: var(--font-head); font-size: 13.5px; font-weight: 800; color: #12291e; text-transform: uppercase; letter-spacing: 0.4px; }
+.sr-sign-role { font-size: 11px; font-weight: 700; color: #5a6b60; margin-top: 1px; }
+.sr-sign-company { font-size: 11px; font-weight: 800; color: #1f5e3f; margin-top: 1px; }
+.sr-sign-email { font-size: 11px; color: #38503f; font-weight: 600; margin-top: 1px; }
+
+/* ============ REPORTE DE VENTAS - fin ============ */
+
 .pill-count {
   font-size: 11.5px; font-weight: 600; color: var(--g-dark);
   background: var(--g-soft); border: 1px solid #d3e7d9;

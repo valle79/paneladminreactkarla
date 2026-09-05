@@ -3,6 +3,7 @@ import Icon from './Icon';
 import { useReactToPrint } from 'react-to-print';
 import { Modal } from './Modal';
 import { COMPANY, PROFORMA_DEFAULTS, formatDocNumber, formatMoneyPLN, moneySymbol } from '../config';
+import { useAuth } from '../auth';
 import { API_URL } from '../api';
 import { amountInWords } from '../lib/amountInWords';
 import logoElIqueno from '../images/Logo-El-Iqueño.png';
@@ -59,6 +60,22 @@ function DocHeader({ sale, fechaDoc, horaDoc, fechaPago }) {
 /* Bloque de datos del cliente y condiciones juntos */
 function DocClientAndConditions({ client, docRuc, clienteLinea, sale, o, isProformaLike }) {
   const muestraDireccion = client.address || client.direccion || '—';
+  const symbol = moneySymbol(o.moneda);
+  const estadoPago = (() => {
+    const total = Number(sale.total || 0);
+    const status = sale.payment_status || 'por_pagar';
+    const fmt = (n) => `${symbol} ${formatMoneyPLN(n)}`;
+    const fecha = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—');
+    if (status === 'pagado') return `CANCELADO — ${fmt(total)}`;
+    if (status === 'a_cuenta') {
+      const pagado = Number(sale.amount_paid || 0);
+      const saldo = sale.amount_pending != null ? Number(sale.amount_pending) : (total - pagado);
+      return `PAGO PARCIAL — pagado ${fmt(pagado)}, saldo ${fmt(saldo)}`
+        + (sale.pending_payment_date ? ` · fecha: ${fecha(sale.pending_payment_date)}` : '');
+    }
+    return `PENDIENTE — ${fmt(total)}`
+      + (sale.payment_date ? ` · fecha: ${fecha(sale.payment_date)}` : '');
+  })();
   return (
     <div className="proforma-client-conditions-wrapper">
       {/* Información del cliente (izquierda) */}
@@ -90,6 +107,13 @@ function DocClientAndConditions({ client, docRuc, clienteLinea, sale, o, isProfo
             <span className="pc-sep">:</span>
             <span className="pc-value">{sale.advisor_name || '—'}</span>
           </div>
+          {!isProformaLike && (
+            <div className="proforma-client-line">
+              <span className="pc-label">Estado pago</span>
+              <span className="pc-sep">:</span>
+              <span className="pc-value">{estadoPago}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -117,6 +141,11 @@ function DocClientAndConditions({ client, docRuc, clienteLinea, sale, o, isProfo
               <span className="pc-label">Entrega</span>
               <span className="pc-sep">:</span>
               <span className="pc-value">{o.entrega}</span>
+            </div>
+            <div className="proforma-cond-line">
+              <span className="pc-label">Estado pago</span>
+              <span className="pc-sep">:</span>
+              <span className="pc-value">{estadoPago}</span>
             </div>
           </div>
         </div>
@@ -241,11 +270,15 @@ function DocMessage({ isProformaLike }) {
   );
 }
 
-/* Firma */
-function DocSignature({ sale }) {
-  const sellerName = sale.advisor?.name
-    ? sale.advisor.name
-    : COMPANY.seller.name;
+/* Firma (dinámica según el usuario que exporta) */
+function DocSignature({ sale, user }) {
+  const sellerName = user?.name
+    ? user.name
+    : sale.advisor?.name
+      ? sale.advisor.name
+      : COMPANY.seller.name;
+  const sellerRole = user?.roles?.[0]?.name || COMPANY.seller.role;
+  const sellerEmail = user?.email || COMPANY.seller.email || COMPANY.emails[0];
   return (
     <div className="proforma-sign">
       <div className="proforma-sign-note">
@@ -255,15 +288,15 @@ function DocSignature({ sale }) {
       <div className="proforma-sign-col">
         <div className="proforma-sign-line" />
         <div className="proforma-sign-name">{sellerName}</div>
-        <div className="proforma-sign-role">{COMPANY.seller.role}</div>
+        <div className="proforma-sign-role">{sellerRole}</div>
         <div className="proforma-sign-company">{COMPANY.name}</div>
-        <div className="proforma-sign-email">{COMPANY.seller.email || COMPANY.emails[0]}</div>
+        <div className="proforma-sign-email">{sellerEmail}</div>
       </div>
     </div>
   );
 }
 
-export const ProformaDocument = forwardRef(function ProformaDocument({ sale, options, documentTime }, ref) {
+export const ProformaDocument = forwardRef(function ProformaDocument({ sale, options, documentTime, user }, ref) {
   const o = { ...PROFORMA_DEFAULTS, ...options };
   const isProformaLike = sale.invoice_type === 'proforma' || sale.invoice_type === 'cotizacion';
   const client = sale.client || {};
@@ -303,7 +336,7 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
           <DocTotals sub={sub} igv={igv} discount={discount} total={total} symbol={symbol} o={o} isProformaLike={isProformaLike} />
           <DocBank o={o} isProformaLike={isProformaLike} />
           <DocMessage isProformaLike={isProformaLike} />
-          <DocSignature sale={sale} />
+          <DocSignature sale={sale} user={user} />
         </div>
         <div className="proforma-doc-foot">
           <DocFooter page={1} total={pagesTotal} />
@@ -365,6 +398,7 @@ export const ProformaDocument = forwardRef(function ProformaDocument({ sale, opt
 
 export default function ProformaModal({ open, onClose, sale, onConfirm, confirmText = 'Confirmar y registrar' }) {
   const printRef = useRef(null);
+  const { user } = useAuth();
   const [opts, setOpts] = useState({ ...PROFORMA_DEFAULTS });
   const [busy, setBusy] = useState(false);
   const [documentTime, setDocumentTime] = useState(() => new Date());
@@ -434,7 +468,7 @@ export default function ProformaModal({ open, onClose, sale, onConfirm, confirmT
             </div>
           )}
           <div className="proforma-preview">
-            <ProformaDocument ref={printRef} sale={wrappedSale} options={opts} documentTime={documentTime} />
+            <ProformaDocument ref={printRef} sale={wrappedSale} options={opts} documentTime={documentTime} user={user} />
           </div>
         </>
       )}
