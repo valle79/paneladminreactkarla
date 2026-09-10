@@ -3,11 +3,12 @@ import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
 import { Modal, useConfirm } from '../components/Modal';
-import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, fmtMoney } from '../components/ui';
+import { Toolbar, useSearch, useListReload, Loader, EmptyState, ErrorState, fmtMoney, ImageCell } from '../components/ui';
 import { Pagination } from '../components/Pagination';
+import { FileUpload } from '../components/FileUpload';
 import { useAuth } from '../auth';
 
-const empty = { name: '', price: '' };
+const empty = { name: '', price: '', image_url: null };
 
 export default function Services() {
   const toast = useToast();
@@ -34,14 +35,14 @@ export default function Services() {
   const reloadList = useListReload(page, setPage, load, editingId);
 
   const openAdd = () => { setEditingId(null); setForm(empty); setModal(true); };
-  const openEdit = (r) => { setEditingId(r.id); setForm({ name: r.name, price: r.price }); setModal(true); };
+  const openEdit = (r) => { setEditingId(r.id); setForm({ name: r.name, price: r.price, image_url: r.image_url || null }); setModal(true); };
 
   const save = async () => {
     if (!form.name.trim()) return toast.warning('El nombre es obligatorio');
     if (form.price === '' || Number(form.price) <= 0) return toast.warning('El precio debe ser mayor a 0');
     setBusy(true);
     try {
-      const payload = { name: form.name.trim(), price: parseFloat(String(form.price).replace(',', '.')) };
+      const payload = { name: form.name.trim(), price: parseFloat(String(form.price).replace(',', '.')), image_url: form.image_url || null };
       if (editingId) {
         await api.put(`/services/${editingId}`, payload);
         toast.success('Servicio actualizado');
@@ -94,7 +95,7 @@ export default function Services() {
                 <tr key={r.id}>
                   <td data-label="Servicio">
                     <div className="flex">
-                      <span className="thumb-wrap" style={{ width: 38, height: 38 }}><Icon name="money-bag" size={17} /></span>
+                      <ImageCell src={r.image_url} width={38} />
                       <span className="cell-title">{r.name}</span>
                     </div>
                   </td>
@@ -144,6 +145,16 @@ export default function Services() {
         <div className="field">
           <label>Precio (S/) <span className="req">*</span></label>
           <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+        </div>
+        <div className="field">
+          <label>Foto del servicio</label>
+          <FileUpload
+            value={form.image_url}
+            onChange={(url) => setForm({ ...form, image_url: url })}
+            accept="image/*"
+            isImage={true}
+            hint="Opcional. Imagen del servicio para mostrar en documentos."
+          />
         </div>
       </Modal>
 

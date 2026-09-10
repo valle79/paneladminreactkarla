@@ -25,8 +25,8 @@ def _build_pool():
     global _pool
     if _pool is None:
         _pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=1,
-            maxconn=12,
+            minconn=6,
+            maxconn=14,
             dsn=DATABASE_URL,
             cursor_factory=psycopg2.extras.RealDictCursor,
         )
@@ -44,7 +44,7 @@ def _ensure_keepalive():
 def _ping_loop():
     """Mantiene el compute de Neon despierto y la conexión del pool caliente."""
     while True:
-        time.sleep(30)
+        time.sleep(15)
         try:
             conn = get_conn()
             try:

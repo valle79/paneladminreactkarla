@@ -31,3 +31,15 @@ ALTER TABLE public.sales
     ADD COLUMN IF NOT EXISTS discount_type VARCHAR(20),
     ADD COLUMN IF NOT EXISTS discount_value NUMERIC(12, 2) DEFAULT 0,
     ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(14, 2) DEFAULT 0 NOT NULL;
+
+-- ============================================================================
+--  Opciones de proforma/cotización (Moneda, Validez, Forma de pago, Entrega)
+--  Idempotente: se puede re-ejecutar sin errores.
+-- ============================================================================
+ALTER TABLE public.sales ADD COLUMN IF NOT EXISTS proforma_options TEXT;
+
+-- ============================================================================
+--  Foto en servicios
+--  Idempotente: se puede re-ejecutar sin errores.
+-- ============================================================================
+ALTER TABLE public.services ADD COLUMN IF NOT EXISTS image_url TEXT;

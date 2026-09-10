@@ -24,6 +24,7 @@ import rbac
 import storage
 import whatsapp
 import admin_users
+import purchases
 from auth import create_token, require_auth, get_current_user, require_permission
 import password as pw
 
@@ -63,6 +64,7 @@ app.add_middleware(
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.include_router(admin_users.router)
+app.include_router(purchases.router)
 
 
 @app.on_event("startup")
@@ -502,6 +504,51 @@ def restore_spare_part(item_id: int, actor: dict = Depends(require_permission("S
 
 
 # ============================================================================
+# PIEZAS (piezas a utilizar en la elaboración)
+# ============================================================================
+
+class PiezaMixin(SoftDeleteMixin):
+    table = "piezas"
+    json_cols = ()
+
+
+piezas_crud = PiezaMixin()
+
+
+@app.get("/api/piezas")
+def list_piezas(include_deleted: bool = False, page: int = 1, limit: int = 50, _: dict = Depends(require_permission("PIEZAS_VIEW"))):
+    return _conn_or_400(lambda: piezas_crud.list(include_deleted, page, limit))
+
+
+@app.post("/api/piezas")
+def create_pieza(payload: dict, actor: dict = Depends(require_permission("PIEZAS_CREATE"))):
+    item = _conn_or_400(lambda: piezas_crud.create(payload))
+    rbac.audit(actor["id"], actor["email"], "create", "piezas", item["id"], {"name": payload.get("name")})
+    return item
+
+
+@app.put("/api/piezas/{item_id}")
+def update_pieza(item_id: int, payload: dict, actor: dict = Depends(require_permission("PIEZAS_UPDATE"))):
+    item = _conn_or_400(lambda: piezas_crud.update(item_id, payload))
+    rbac.audit(actor["id"], actor["email"], "update", "piezas", item_id, {"name": payload.get("name")})
+    return item
+
+
+@app.delete("/api/piezas/{item_id}")
+def delete_pieza(item_id: int, actor: dict = Depends(require_permission("PIEZAS_DELETE"))):
+    res = _conn_or_400(lambda: piezas_crud.soft_delete(item_id))
+    rbac.audit(actor["id"], actor["email"], "delete", "piezas", item_id, {})
+    return res
+
+
+@app.post("/api/piezas/{item_id}/restore")
+def restore_pieza(item_id: int, actor: dict = Depends(require_permission("PIEZAS_DELETE"))):
+    res = _conn_or_400(lambda: piezas_crud.restore(item_id))
+    rbac.audit(actor["id"], actor["email"], "restore", "piezas", item_id, {})
+    return res
+
+
+# ============================================================================
 # API PÚBLICA (web pública iquenosac) — sin autenticación
 # Devuelve solo registros activos (no borrados y con status = 'active').
 # ============================================================================
@@ -916,7 +963,7 @@ def _load_catalog_batch_cur(items: list[dict], cur) -> dict:
             continue
         cols = "name, description, specifications, features, image_url"
         if table == "services":
-            cols = "name"
+            cols = "name, image_url"
         cur.execute(
             f"SELECT id, {cols} FROM {table} WHERE id = ANY(%s) AND NOT deleted",
             (list(table_ids),),
@@ -986,6 +1033,8 @@ def _serialize_sales(rows) -> list:
         out = []
         for row in rows:
             sale = dict(row)
+            if sale.get("proforma_options"):
+                sale["proforma_options"] = db.from_json(sale["proforma_options"])
             sale["items"] = [dict(x) for x in items_by_sale.get(sale["id"], [])]
             if sale.get("client_id"):
                 if sale.get("client_type") == "ruc":
@@ -1160,6 +1209,7 @@ def create_sale(payload: dict, actor: dict = Depends(require_permission("SALES_C
                     "amount_paid": payload.get("amount_paid"),
                     "amount_pending": payload.get("amount_pending"),
                     "pending_payment_date": payload.get("pending_payment_date"),
+                    "proforma_options": db.to_json(payload.get("proforma_options")),
                 }
                 cols = ", ".join(data.keys())
                 ph = ", ".join(["%s"] * len(data))
@@ -1243,6 +1293,7 @@ def update_sale(sale_id: int, payload: dict, actor: dict = Depends(require_permi
                     "amount_paid": payload.get("amount_paid"),
                     "amount_pending": payload.get("amount_pending"),
                     "pending_payment_date": payload.get("pending_payment_date"),
+                    "proforma_options": db.to_json(payload.get("proforma_options", existing.get("proforma_options"))),
                 }
                 if not data["payment_date"]:
                     if data["payment_status"] == "pagado":

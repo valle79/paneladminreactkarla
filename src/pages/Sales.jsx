@@ -301,19 +301,21 @@ export default function Sales() {
         amount_pending: form.payment_status === 'a_cuenta' ? Number((total - Number(form.amount_paid)).toFixed(2)) : null,
         pending_payment_date: form.payment_status === 'a_cuenta' ? form.pending_payment_date || null : null,
         payment_description: form.payment_description || '',
+        proforma_options: form.proforma_options || undefined,
         items,
         created_at: new Date().toISOString(),
       },
     });
   };
 
-  const confirmPreview = async () => {
+  const confirmPreview = async (opts) => {
     try {
+      const payload = { ...preview.payload, proforma_options: opts || null };
       if (editingId) {
-        await api.put(`/sales/${editingId}`, preview.payload);
+        await api.put(`/sales/${editingId}`, payload);
         toast.success('Venta actualizada');
       } else {
-        await api.post('/sales', preview.payload);
+        await api.post('/sales', payload);
         toast.success(isProformaLike ? 'Proforma registrada correctamente' : 'Venta registrada correctamente');
       }
       setPreview(null);
@@ -352,6 +354,7 @@ export default function Sales() {
       payment_date: s.payment_date || '',
       amount_paid: s.amount_paid ?? '',
       pending_payment_date: s.pending_payment_date || '',
+      proforma_options: s.proforma_options || null,
       items: (s.items || []).map((i) => ({
         item_type: i.item_type, item_id: i.item_id, manual_name: i.manual_name || '',
         manual_description: i.manual_description || '',
@@ -1225,7 +1228,7 @@ export default function Sales() {
           style={{ position: 'fixed', top: 0, left: -12000, width: 794, zIndex: -1, pointerEvents: 'none', background: '#fff' }}
           aria-hidden="true"
         >
-          <ProformaDocument ref={docRef} sale={waSale} user={user} />
+          <ProformaDocument ref={docRef} sale={waSale} options={waSale.proforma_options} user={user} />
         </div>
       )}
     </>

@@ -5,7 +5,13 @@ Se apoya en db.py (psycopg2, SQL crudo) tal como el resto del backend.
 No guarda contraseñas en texto plano: el hash se genera en auth/password.py.
 """
 
+import time
+
 import db
+
+# Caché en memoria de permisos/roles por usuario (TTL corto; se invalida sola).
+_PERM_CACHE: dict = {}
+_PERM_TTL = 30.0
 
 # ============================================================================
 # Catálogo de permisos del sistema
@@ -26,6 +32,11 @@ PERMISSIONS = [
     ("SPARE_PARTS_CREATE", "spare_parts", "Crear repuestos"),
     ("SPARE_PARTS_UPDATE", "spare_parts", "Editar repuestos"),
     ("SPARE_PARTS_DELETE", "spare_parts", "Eliminar repuestos"),
+
+    ("PIEZAS_VIEW", "piezas", "Ver piezas"),
+    ("PIEZAS_CREATE", "piezas", "Crear piezas"),
+    ("PIEZAS_UPDATE", "piezas", "Editar piezas"),
+    ("PIEZAS_DELETE", "piezas", "Eliminar piezas"),
 
     ("PROMOTIONS_VIEW", "promotions", "Ver promociones"),
     ("PROMOTIONS_CREATE", "promotions", "Crear promociones"),
@@ -67,6 +78,44 @@ PERMISSIONS = [
 
     ("SETTINGS_VIEW", "settings", "Ver configuración"),
     ("SETTINGS_MANAGE", "settings", "Gestionar configuración"),
+
+    ("SUPPLIERS_VIEW", "suppliers", "Ver proveedores"),
+    ("SUPPLIERS_CREATE", "suppliers", "Crear proveedores"),
+    ("SUPPLIERS_UPDATE", "suppliers", "Editar proveedores"),
+    ("SUPPLIERS_DELETE", "suppliers", "Eliminar proveedores"),
+
+    ("PURCHASES_VIEW", "purchases", "Ver compras"),
+    ("PURCHASES_CREATE", "purchases", "Crear compras"),
+    ("PURCHASES_UPDATE", "purchases", "Editar compras"),
+    ("PURCHASES_DELETE", "purchases", "Anular/cancelar compras"),
+
+    ("PURCHASE_ORDERS_VIEW", "purchase_orders", "Ver órdenes de compra"),
+    ("PURCHASE_ORDERS_CREATE", "purchase_orders", "Crear órdenes de compra"),
+    ("PURCHASE_ORDERS_UPDATE", "purchase_orders", "Editar órdenes de compra"),
+    ("PURCHASE_ORDERS_DELETE", "purchase_orders", "Eliminar órdenes de compra"),
+
+    ("PURCHASE_RECEIPTS_VIEW", "purchase_receipts", "Ver recepciones"),
+    ("PURCHASE_RECEIPTS_CREATE", "purchase_receipts", "Crear recepciones"),
+    ("PURCHASE_RECEIPTS_UPDATE", "purchase_receipts", "Editar recepciones"),
+    ("PURCHASE_RECEIPTS_DELETE", "purchase_receipts", "Anular recepciones"),
+
+    ("SUPPLIER_PAYMENTS_VIEW", "supplier_payments", "Ver pagos a proveedores"),
+    ("SUPPLIER_PAYMENTS_CREATE", "supplier_payments", "Registrar pagos a proveedores"),
+    ("SUPPLIER_PAYMENTS_UPDATE", "supplier_payments", "Editar/anular pagos a proveedores"),
+    ("SUPPLIER_PAYMENTS_DELETE", "supplier_payments", "Anular pagos a proveedores"),
+
+    ("IMPORTS_VIEW", "imports", "Ver importaciones"),
+    ("IMPORTS_CREATE", "imports", "Crear importaciones"),
+    ("IMPORTS_UPDATE", "imports", "Editar importaciones"),
+    ("IMPORTS_DELETE", "imports", "Eliminar importaciones"),
+
+    ("IMPORT_COSTS_VIEW", "import_costs", "Ver costos de importación"),
+    ("IMPORT_COSTS_CREATE", "import_costs", "Registrar costos de importación"),
+    ("IMPORT_COSTS_UPDATE", "import_costs", "Editar costos de importación"),
+    ("IMPORT_COSTS_DELETE", "import_costs", "Eliminar costos de importación"),
+
+    ("ACCOUNTS_PAYABLE_VIEW", "accounts_payable", "Ver cuentas por pagar"),
+    ("PURCHASE_REPORTS_VIEW", "reports", "Ver reportes de compras"),
 ]
 
 # Permisos de escritura (para protecciones especiales de SUPER_ADMIN)
@@ -99,8 +148,60 @@ ROLES = {
         "is_system": True,
         "permissions": (
             ["DASHBOARD_VIEW", "STATS_VIEW", "UPLOAD_FILES", "CONSULTAR_DNI_RUC"]
-            + _crud("PRODUCTS") + _crud("SPARE_PARTS") + _crud("PROMOTIONS")
+            + _crud("PRODUCTS") + _crud("SPARE_PARTS") + _crud("PIEZAS") + _crud("PROMOTIONS")
             + _crud("ADVISORS") + _crud("SERVICES") + _crud("CLIENTS") + _crud("SALES")
+            + _crud("SUPPLIERS") + _crud("PURCHASES") + _crud("PURCHASE_ORDERS")
+            + _crud("PURCHASE_RECEIPTS") + _crud("SUPPLIER_PAYMENTS")
+            + _crud("IMPORTS") + _crud("IMPORT_COSTS") + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW"]
+        ),
+    },
+    "COMPRAS": {
+        "name": "Compras",
+        "description": "Área de compras: proveedores, compras nacionales e internacionales, órdenes, recepciones, importaciones y pagos.",
+        "is_system": True,
+        "permissions": (
+            ["DASHBOARD_VIEW", "STATS_VIEW", "UPLOAD_FILES", "SETTINGS_VIEW"]
+            + ["PRODUCTS_VIEW", "SPARE_PARTS_VIEW", "SERVICES_VIEW", "CLIENTS_VIEW"]
+            + ["PIEZAS_VIEW", "PIEZAS_CREATE", "PIEZAS_UPDATE"]
+            + _crud("SUPPLIERS") + _crud("PURCHASES") + _crud("PURCHASE_ORDERS")
+            + _crud("PURCHASE_RECEIPTS") + _crud("SUPPLIER_PAYMENTS")
+            + _crud("IMPORTS") + _crud("IMPORT_COSTS")
+            + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW"]
+        ),
+    },
+    "ALMACEN": {
+        "name": "Almacén",
+        "description": "Gestiona recepción de mercadería e ingreso a inventario.",
+        "is_system": True,
+        "permissions": (
+            ["DASHBOARD_VIEW", "STATS_VIEW", "UPLOAD_FILES"]
+            + ["PRODUCTS_VIEW", "SPARE_PARTS_VIEW"]
+            + ["SUPPLIERS_VIEW", "PURCHASES_VIEW", "PURCHASE_ORDERS_VIEW"]
+            + ["PURCHASE_RECEIPTS_VIEW", "PURCHASE_RECEIPTS_CREATE", "PURCHASE_RECEIPTS_UPDATE"]
+            + ["IMPORTS_VIEW", "SUPPLIER_PAYMENTS_VIEW", "ACCOUNTS_PAYABLE_VIEW"]
+        ),
+    },
+    "CONTABILIDAD": {
+        "name": "Contabilidad",
+        "description": "Control financiero: cuentas por pagar, pagos y reportes de compras.",
+        "is_system": True,
+        "permissions": (
+            ["DASHBOARD_VIEW", "STATS_VIEW", "SETTINGS_VIEW"]
+            + ["SUPPLIERS_VIEW", "PURCHASES_VIEW", "PURCHASE_ORDERS_VIEW", "PURCHASE_RECEIPTS_VIEW"]
+            + ["SUPPLIER_PAYMENTS_VIEW", "SUPPLIER_PAYMENTS_CREATE", "SUPPLIER_PAYMENTS_UPDATE"]
+            + ["IMPORTS_VIEW", "IMPORT_COSTS_VIEW"]
+            + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW"]
+        ),
+    },
+    "GERENCIA": {
+        "name": "Gerencia",
+        "description": "Visión ejecutiva del módulo de compras (solo lectura).",
+        "is_system": True,
+        "permissions": (
+            ["DASHBOARD_VIEW", "STATS_VIEW", "SETTINGS_VIEW"]
+            + ["SUPPLIERS_VIEW", "PURCHASES_VIEW", "PURCHASE_ORDERS_VIEW", "PURCHASE_RECEIPTS_VIEW"]
+            + ["SUPPLIER_PAYMENTS_VIEW", "IMPORTS_VIEW", "IMPORT_COSTS_VIEW"]
+            + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW", "PRODUCTS_VIEW", "SPARE_PARTS_VIEW"]
         ),
     },
     "EDITOR_WEB": {
@@ -183,6 +284,10 @@ def seed_roles():
 # ============================================================================
 def get_user_permissions(user_id: int) -> set:
     """Devuelve el conjunto de permisos efectivos del usuario (uniendo sus roles)."""
+    now = time.monotonic()
+    hit = _PERM_CACHE.get(user_id)
+    if hit and now - hit[0] < _PERM_TTL and hit[1] is not None:
+        return hit[1]
     rows = db.fetch_all(
         """SELECT DISTINCT p.code
            FROM users u
@@ -193,10 +298,27 @@ def get_user_permissions(user_id: int) -> set:
            WHERE u.id = %s AND u.active""",
         (user_id,),
     )
-    return {r["code"] for r in rows}
+    perms = {r["code"] for r in rows}
+    if hit:
+        hit[1] = perms
+    else:
+        _PERM_CACHE[user_id] = [now, perms, None]
+    return perms
+
+
+def invalidate_permissions(user_id: int = None):
+    """Invalida la caché de un usuario (o de todos) tras cambios de roles/permisos."""
+    if user_id is None:
+        _PERM_CACHE.clear()
+    else:
+        _PERM_CACHE.pop(user_id, None)
 
 
 def get_user_roles(user_id: int) -> list:
+    now = time.monotonic()
+    hit = _PERM_CACHE.get(user_id)
+    if hit and now - hit[0] < _PERM_TTL and hit[2] is not None:
+        return hit[2]
     rows = db.fetch_all(
         """SELECT r.id, r.name, r.code, r.description, r.is_system
            FROM user_roles ur
@@ -204,7 +326,12 @@ def get_user_roles(user_id: int) -> list:
            WHERE ur.user_id = %s ORDER BY r.id""",
         (user_id,),
     )
-    return [dict(r) for r in rows]
+    roles = [dict(r) for r in rows]
+    if hit:
+        hit[2] = roles
+    else:
+        _PERM_CACHE[user_id] = [now, None, roles]
+    return roles
 
 
 def user_has_permission(user_id: int, perm: str) -> bool:

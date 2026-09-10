@@ -17,8 +17,11 @@ print("Schema updates applied OK")
 cur.execute("""
   SELECT table_name, column_name, data_type, column_default
   FROM information_schema.columns
-  WHERE table_schema='public' AND table_name IN ('machine_products','spare_parts')
-    AND column_name IN ('stock','status')
+  WHERE table_schema='public' AND (
+    (table_name IN ('machine_products','spare_parts') AND column_name IN ('stock','status')) OR
+    (table_name='sales' AND column_name='proforma_options') OR
+    (table_name='services' AND column_name='image_url')
+  )
   ORDER BY table_name, column_name
 """)
 for r in cur.fetchall():

@@ -66,6 +66,7 @@ export default function DocView() {
             <ProformaDocument
               ref={printRef}
               sale={{ ...sale, advisor_name: sale.advisor_name || sale.advisor?.name }}
+              options={sale.proforma_options}
             />
           </div>
         )}

@@ -407,7 +407,7 @@ export default function ProformaModal({ open, onClose, sale, onConfirm, confirmT
 
   useEffect(() => {
     if (open) {
-      setOpts({ ...PROFORMA_DEFAULTS });
+      setOpts({ ...PROFORMA_DEFAULTS, ...(sale?.proforma_options || {}) });
       setDocumentTime(new Date());
     }
   }, [open]);
@@ -436,7 +436,7 @@ export default function ProformaModal({ open, onClose, sale, onConfirm, confirmT
           <button className="btn btn-ghost" onClick={onClose}><Icon name="x" size={15} /> Cerrar</button>
           <button className="btn btn-yellow" onClick={handlePrint}><Icon name="print" size={15} /> Imprimir / PDF</button>
           {onConfirm && (
-            <button className="btn btn-primary" disabled={busy} onClick={async () => { setBusy(true); await onConfirm(); setBusy(false); }}>
+            <button className="btn btn-primary" disabled={busy} onClick={async () => { setBusy(true); await onConfirm(opts); setBusy(false); }}>
               {busy ? <span className="spinner" /> : <Icon name="checkmark--v1" size={16} />} {confirmText}
             </button>
           )}
