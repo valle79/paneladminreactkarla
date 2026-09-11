@@ -2209,8 +2209,8 @@ def delete_purchase_receipt(receipt_id: int, payload: dict, actor: dict = Depend
 # ============================================================================
 
 def _recompute_payment_status(conn, cur, purchase_id):
-    """Recalcula estado_pago según la suma de pagos no anulados."""
-    cur.execute("SELECT tipo_cambio, total FROM purchases WHERE id = %s", (purchase_id,))
+    """Recalcula estado_pago según la suma de pagos no anulados y el vencimiento."""
+    cur.execute("SELECT tipo_cambio, total, fecha_vencimiento FROM purchases WHERE id = %s", (purchase_id,))
     purchase = dict(cur.fetchone())
     if not purchase:
         return None
@@ -2222,10 +2222,14 @@ def _recompute_payment_status(conn, cur, purchase_id):
     paid = sum(_dec(r["monto"]) * (_dec(r["tipo_cambio"], 1) / tc) for r in cur.fetchall())
     total = _dec(purchase["total"])
     estado = "PENDIENTE"
-    if paid >= total and total > 0:
+    if total > 0 and paid >= total:
         estado = "PAGADA"
     elif paid > 0:
         estado = "PAGADA_PARCIAL"
+    if estado in ("PENDIENTE", "PAGADA_PARCIAL"):
+        venc = purchase.get("fecha_vencimiento")
+        if venc and venc < date.today():
+            estado = "VENCIDA"
     cur.execute("UPDATE purchases SET estado_pago = %s WHERE id = %s", (estado, purchase_id))
     return estado
 
@@ -2286,22 +2290,25 @@ def create_supplier_payment(payload: dict, actor: dict = Depends(require_permiss
         medio = _str_upper(payload.get("medio_pago"))
         if not medio:
             raise HTTPException(status_code=400, detail="El medio de pago es obligatorio")
+        if medio not in MEDIOS_PAGO:
+            raise HTTPException(status_code=400,
+                                detail=f"Medio de pago inválido. Usa: {', '.join(MEDIOS_PAGO)}")
         tc = _dec(payload.get("tipo_cambio"), 1)
         if tc <= 0:
             raise HTTPException(status_code=400, detail="tipo_cambio debe ser mayor a 0")
-        moneda = _str_upper(payload.get("moneda")) or "PEN"
-        if moneda not in MONEDAS:
-            raise HTTPException(status_code=400, detail="Moneda no válida")
 
         conn = db.get_conn()
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT * FROM purchases WHERE id = %s", (purchase_id,))
+                cur.execute("SELECT * FROM purchases WHERE id = %s FOR UPDATE", (purchase_id,))
                 purchase = dict(cur.fetchone())
                 if not purchase or purchase.get("deleted"):
                     raise HTTPException(status_code=404, detail="Compra no encontrada")
                 if purchase["estado"] == "CANCELADA":
                     raise HTTPException(status_code=400, detail="No se pueden registrar pagos en compras canceladas")
+                moneda = _str_upper(payload.get("moneda")) or purchase["moneda"]
+                if moneda not in MONEDAS:
+                    raise HTTPException(status_code=400, detail="Moneda no válida")
                 cur.execute(
                     "SELECT monto, tipo_cambio FROM supplier_payments "
                     "WHERE purchase_id = %s AND NOT anulado", (purchase_id,))
