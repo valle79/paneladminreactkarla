@@ -21,6 +21,8 @@ const Purchases = lazy(() => import('./pages/Purchases'));
 const Users = lazy(() => import('./pages/Users'));
 const Roles = lazy(() => import('./pages/Roles'));
 const DocView = lazy(() => import('./pages/DocView'));
+const Pagos = lazy(() => import('./pages/Pagos'));
+const CuentasPorPagar = lazy(() => import('./pages/CuentasPorPagar'));
 
 const NoAccess = () => (
   <div style={{ padding: 60, textAlign: 'center', color: 'var(--muted)' }}>
@@ -48,6 +50,8 @@ function Shell() {
           <Route path="/proveedores" element={<RequirePermission permission="SUPPLIERS_VIEW" fallback={<NoAccess />}><Suppliers /></RequirePermission>} />
           <Route path="/compras-interiores" element={<RequirePermission permission="PURCHASES_VIEW" fallback={<NoAccess />}><Purchases tipo="NACIONAL" /></RequirePermission>} />
           <Route path="/compras-exteriores" element={<RequirePermission permission="PURCHASES_VIEW" fallback={<NoAccess />}><Purchases tipo="INTERNACIONAL" /></RequirePermission>} />
+          <Route path="/pagos" element={<RequirePermission permission="SUPPLIER_PAYMENTS_VIEW" fallback={<NoAccess />}><Pagos /></RequirePermission>} />
+          <Route path="/cuentas-por-pagar" element={<RequirePermission permission="ACCOUNTS_PAYABLE_VIEW" fallback={<NoAccess />}><CuentasPorPagar /></RequirePermission>} />
           <Route path="/usuarios" element={<RequirePermission permission="USERS_VIEW" fallback={<NoAccess />}><Users /></RequirePermission>} />
           <Route path="/roles" element={<RequirePermission permission="ROLES_VIEW" fallback={<NoAccess />}><Roles /></RequirePermission>} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -9,6 +9,7 @@ import {
 } from '../components/ui';
 import { Pagination } from '../components/Pagination';
 import { useAuth } from '../auth';
+import { PaymentModal } from '../components/PaymentModal';
 
 const CURR_SYM = { PEN: 'S/', USD: 'US$', EUR: '€', CNY: 'CN¥' };
 const CURRENCIES = ['PEN', 'USD', 'EUR', 'CNY'];
@@ -587,6 +588,8 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
     }
   };
 
+  const [payModal, setPayModal] = useState(null);
+
   const openView = (p) => {
     setView(null);
     setViewBusy(true);
@@ -722,12 +725,22 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
                   <td>
                     <div className="row-actions">
                       <button className="btn-icon" onClick={() => openView(p)} title="Ver detalle"><Icon name="visible" size={14} /></button>
-                      {can('PURCHASES_UPDATE') && p.estado_pago !== 'PAGADO' && Number(p.saldo || 0) > 0 && p.estado !== 'CANCELADA' && (
+                      {can('SUPPLIER_PAYMENTS_CREATE') && p.estado !== 'CANCELADA' && Number(p.saldo || 0) > 0 && (
+                        <button 
+                          className="btn-icon" 
+                          style={{ background: 'var(--g-soft)', color: 'var(--g-dark)', border: '1px solid var(--g-primary)' }}
+                          onClick={() => setPayModal(p)} 
+                          title="Registrar pago (parcial o total)"
+                        >
+                          <Icon name="cash" size={14} />
+                        </button>
+                      )}
+                      {can('SUPPLIER_PAYMENTS_CREATE') && p.estado_pago !== 'PAGADO' && Number(p.saldo || 0) > 0 && p.estado !== 'CANCELADA' && (
                         <button 
                           className="btn-icon" 
                           style={{ background: 'var(--g-soft)', color: 'var(--g-dark)', border: '1px solid var(--g-primary)' }}
                           onClick={() => markAsPaid(p)} 
-                          title="Marcar como pagada"
+                          title="Marcar como pagada (pago total)"
                         >
                           <Icon name="money" size={14} />
                         </button>
@@ -1509,6 +1522,13 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
           </div>
         )}
       </Modal>
+
+      <PaymentModal
+        open={!!payModal}
+        onClose={() => setPayModal(null)}
+        purchase={payModal}
+        onDone={() => load()}
+      />
 
       {ConfirmDialog}
     </>

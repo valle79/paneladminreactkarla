@@ -387,6 +387,8 @@ INSERT INTO public.settings (key, value, description) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 -- ==== VISTA: v_accounts_payable (Cuentas por pagar) =========================
+-- Saldo en MONEDA DE LA COMPRA: el total pagado convierte cada pago con su propio
+-- tipo de cambio y el de la compra (mismo criterio que el detalle en purchases.py).
 CREATE OR REPLACE VIEW public.v_accounts_payable AS
 SELECT
     p.id                          AS purchase_id,
@@ -407,10 +409,13 @@ SELECT
     GREATEST(p.total - COALESCE(paid.total_pagado, 0), 0)::NUMERIC(16,2) AS saldo
 FROM public.purchases p
 LEFT JOIN (
-    SELECT purchase_id, COALESCE(SUM(monto), 0) AS total_pagado
-    FROM public.supplier_payments
-    WHERE anulado = false
-    GROUP BY purchase_id
+    SELECT sp.purchase_id,
+           COALESCE(SUM(sp.monto * (COALESCE(sp.tipo_cambio, 1) / NULLIF(COALESCE(pr.tipo_cambio, 1), 0))), 0)
+               AS total_pagado
+    FROM public.supplier_payments sp
+    JOIN public.purchases pr ON pr.id = sp.purchase_id
+    WHERE sp.anulado = false
+    GROUP BY sp.purchase_id, pr.tipo_cambio
 ) paid ON paid.purchase_id = p.id;
 
 -- ==== TRIGGERS: updated_at ===================================================

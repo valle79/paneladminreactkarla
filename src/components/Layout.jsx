@@ -20,6 +20,8 @@ const NAV = [
   { to: '/proveedores', icon: 'building', label: 'Proveedores', perm: 'SUPPLIERS_VIEW' },
   { to: '/compras-interiores', icon: 'tractor', label: 'Compras Interiores', perm: 'PURCHASES_VIEW' },
   { to: '/compras-exteriores', icon: 'globe', label: 'Compras Exteriores', perm: 'PURCHASES_VIEW' },
+  { to: '/pagos', icon: 'money-bag', label: 'Pagos a proveedores', perm: 'SUPPLIER_PAYMENTS_VIEW' },
+  { to: '/cuentas-por-pagar', icon: 'cash', label: 'Cuentas por pagar', perm: 'ACCOUNTS_PAYABLE_VIEW' },
   { to: '/usuarios', icon: 'user-male-circle', label: 'Usuarios', perm: 'USERS_VIEW' },
   { to: '/roles', icon: 'security-checked', label: 'Roles', perm: 'ROLES_VIEW' },
 ];
@@ -37,6 +39,8 @@ const TITLES = {
   '/proveedores': 'Gestión de Proveedores',
   '/compras-interiores': 'Compras Interiores',
   '/compras-exteriores': 'Compras Exteriores',
+  '/pagos': 'Pagos a proveedores',
+  '/cuentas-por-pagar': 'Cuentas por Pagar',
   '/usuarios': 'Gestión de Usuarios',
   '/roles': 'Gestión de Roles',
 };
