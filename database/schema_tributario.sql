@@ -179,11 +179,19 @@ CREATE TABLE IF NOT EXISTS public.uit_config (
     CONSTRAINT check_uit_valor CHECK (valor_uit > 0)
 );
 
+-- Valores oficiales de la UIT (SUNAT). La norma que la fija es un
+-- Decreto Supremo del MINISTERIO DE ECONOMÍA Y FINANZAS (suffix "-EF"),
+-- no del MINEDU.
+--   Fuente: https://www.sunat.gob.pe/indicestasas/uit.html
 INSERT INTO public.uit_config (anio, valor_uit, vigencia_desde, descripcion) VALUES
-    (2024, 5350.00, DATE '2024-01-01', 'UIT 2024 (MINEDU).'),
-    (2025, 5500.00, DATE '2025-01-01', 'UIT 2025 (MINEDU).'),
-    (2026, 6000.00, DATE '2026-01-01', 'UIT 2026 (MINEDU). Actualizar según resolución vigente.')
-ON CONFLICT (anio) DO NOTHING;
+    (2023, 4950.00, DATE '2023-01-01', 'UIT 2023. D.S. N° 309-2022-EF.'),
+    (2024, 5150.00, DATE '2024-01-01', 'UIT 2024. D.S. N° 309-2023-EF.'),
+    (2025, 5350.00, DATE '2025-01-01', 'UIT 2025. D.S. N° 260-2024-EF.'),
+    (2026, 5500.00, DATE '2026-01-01', 'UIT 2026. D.S. N° 301-2025-EF.')
+ON CONFLICT (anio) DO UPDATE
+    SET valor_uit      = EXCLUDED.valor_uit,
+        vigencia_desde = EXCLUDED.vigencia_desde,
+        descripcion    = EXCLUDED.descripcion;
 
 -- ============================================================================
 -- 5b. TRAMOS DEL IR ANUAL POR RÉGIMEN (tabla, no constantes en código)
@@ -208,15 +216,25 @@ CREATE TABLE IF NOT EXISTS public.ir_tramos (
     CONSTRAINT uq_tramo UNIQUE (regimen, desde_uit)
 );
 
--- Régimen General (Art. 38° TUO LIR): hasta 15 UIT → 10%, exceso → 29.5%.
+-- Escala progresiva acumulativa del impuesto anual, idéntica para el
+-- Régimen General (Art. 38° TUO LIR) y para el RMT
+-- (D.Leg. 1269 / D.S. 403-2016-EF): hasta 15 UIT de renta neta anual al 10%,
+-- el excedente al 29.5%.
 INSERT INTO public.ir_tramos (regimen, desde_uit, hasta_uit, tasa, descripcion) VALUES
     ('GENERAL', 0, 15,  0.100, 'Primer tramo: hasta 15 UIT de renta neta anual → 10%.'),
-    ('GENERAL', 15, NULL, 0.295, 'Exceso: monto excedente a 15 UIT de renta neta anual → 29.5%.')
-ON CONFLICT (regimen, desde_uit) DO NOTHING;
+    ('GENERAL', 15, NULL, 0.295, 'Exceso: monto excedente a 15 UIT de renta neta anual → 29.5%.'),
+    ('RMT',     0, 15,  0.100, 'RMT: hasta 15 UIT de renta neta anual → 10% (D.Leg. 1269 / D.S. 403-2016-EF).'),
+    ('RMT',    15, NULL, 0.295, 'RMT: excedente a 15 UIT de renta neta anual → 29.5% (D.Leg. 1269 / D.S. 403-2016-EF).')
+ON CONFLICT (regimen, desde_uit) DO UPDATE
+    SET hasta_uit   = EXCLUDED.hasta_uit,
+        tasa        = EXCLUDED.tasa,
+        descripcion = EXCLUDED.descripcion;
 
--- MYPE Tributario (RMT): los tramos anuales los fija la resolución vigente del
--- MEF para cada año. NO se siembran para evitar dar un dato tributario falso;
--- el sistema avisa que falta configurarlos y no calcula un IR anual incorrecto.
+-- Nota sobre el pago a cuenta mensual del RMT: hasta 300 UIT de ingresos netos
+-- anuales se paga el 1% de los ingresos netos del mes. Por encima de ese
+-- umbral la ley exige el mayor entre un coeficiente y 1.5%, que el sistema
+-- NO modela (settings.ir_rate es una tasa fija). Verificar antes de usar el
+-- cálculo mensual si la empresa supera las 300 UIT (≈ S/ 1,650,000 con UIT 2026).
 CREATE INDEX IF NOT EXISTS idx_ir_tramos_regimen
     ON public.ir_tramos(regimen, desde_uit) WHERE activo;
 

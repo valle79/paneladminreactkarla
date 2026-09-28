@@ -23,6 +23,7 @@ const NAV = [
   { to: '/pagos', icon: 'money-bag', label: 'Pagos a proveedores', perm: 'SUPPLIER_PAYMENTS_VIEW' },
   { to: '/cuentas-por-pagar', icon: 'cash', label: 'Cuentas por pagar', perm: 'ACCOUNTS_PAYABLE_VIEW' },
   { to: '/resumen-tributario', icon: 'bar-chart', label: 'Resumen Tributario', perm: 'RESUMEN_TRIBUTARIO_VIEW' },
+  { to: '/config-tributaria', icon: 'settings', label: 'Configuración Tributaria', perm: 'RESUMEN_TRIBUTARIO_VIEW' },
   { to: '/usuarios', icon: 'user-male-circle', label: 'Usuarios', perm: 'USERS_VIEW' },
   { to: '/roles', icon: 'security-checked', label: 'Roles', perm: 'ROLES_VIEW' },
 ];
@@ -43,6 +44,7 @@ const TITLES = {
   '/pagos': 'Pagos a proveedores',
   '/cuentas-por-pagar': 'Cuentas por Pagar',
   '/resumen-tributario': 'Resumen Tributario',
+  '/config-tributaria': 'Configuración Tributaria',
   '/usuarios': 'Gestión de Usuarios',
   '/roles': 'Gestión de Roles',
 };

@@ -690,12 +690,14 @@ def _test_pago_cuenta_y_gastos(bd, cliente_id, advisor_id):
           D(str(ia["renta_neta"])), D("28500.00"))
     check("pagos a cuenta anuales = 300.00",
           D(str(ia["pagos_a_cuenta"])), D("300.00"))
-    check("régimen RMT: avisa que faltan los tramos anuales",
-          bool(ia["tramos_configurados"]), False)
-    check("régimen RMT: muestra advertencia explícita",
-          bool(ia["advertencia"]), True)
-    check("RMT: el impuesto anual se marca como referencia, no oficial",
-          bool(ia["tramos_referencia"]), True)
+    # El RMT ya tiene sus tramos oficiales cargados (0-15 UIT 10%, +15 UIT 29.5%,
+    # D.Leg. 1269 / D.S. 403-2016-EF), asi que el impuesto anual NO es referencial.
+    check("régimen RMT: los tramos anuales están configurados",
+          bool(ia["tramos_configurados"]), True)
+    check("régimen RMT: sin advertencia cuando los tramos están configurados",
+          bool(ia["advertencia"]), False)
+    check("RMT: el impuesto anual es oficial, no referencial",
+          bool(ia["tramos_referencia"]), False)
 
     # Con UIT configurable
     with bd.conn.cursor() as c:
@@ -732,6 +734,72 @@ def _test_pago_cuenta_y_gastos(bd, cliente_id, advisor_id):
 
 
 # ===========================================================================
+# Escala oficial del RMT contra los valores reales de la UIT
+# ===========================================================================
+def test_escala_oficial_rmt():
+    print("\n" + "=" * 78)
+    print("ESCALA OFICIAL RMT + UIT REALES (fuente: SUNAT / gob.pe)")
+    print("=" * 78)
+
+    # UIT oficiales (D.S. del MEF, ver schema_tributario.sql)
+    uit_oficial = {2023: D("4950.00"), 2024: D("5150.00"),
+                   2025: D("5350.00"), 2026: D("5500.00")}
+
+    # 1) Los tramos del RMT deben ser 0-15 UIT al 10% y +15 UIT al 29.5%.
+    tramos = trib.tramos_ir("RMT")
+    check("el RMT tiene 2 tramos configurados", len(tramos), 2)
+    if len(tramos) == 2:
+        check("tramo 1 del RMT: desde 0 hasta 15 UIT",
+              (D(str(tramos[0]["desde_uit"])), D(str(tramos[0]["hasta_uit"]))),
+              (D("0"), D("15")))
+        check("tramo 1 del RMT: tasa 10%", D(str(tramos[0]["tasa"])), D("0.1000"))
+        check("tramo 2 del RMT: desde 15 UIT sin tope",
+              (D(str(tramos[1]["desde_uit"])), tramos[1]["hasta_uit"]),
+              (D("15"), None))
+        check("tramo 2 del RMT: tasa 29.5%", D(str(tramos[1]["tasa"])), D("0.2950"))
+
+    # 2) Con la UIT real de 2026, 15 UIT deben dar S/ 82,500.00.
+    #    Este es el numero que se muestra al usuario como umbral del primer tramo.
+    uit26 = D(str(trib.uit(2026)))
+    check("UIT 2026 = 5,500.00 (D.S. 301-2025-EF)", uit26, D("5500.00"))
+    check("15 UIT 2026 = S/ 82,500.00 (no 90,000)",
+          uit26 * D("15"), D("82500.00"))
+
+    # 3) Escalonado progresivo correcto con la UIT real.
+    rn = D("90000.00")
+    imp, det = trib.calcular_impuesto_anual(rn, tramos, uit26)
+    check("renta neta 90,000 cruza el segundo tramo", len(det), 2)
+    if len(det) == 2:
+        check("base del tramo 1 = 82,500.00", D(str(det[0]["base_soles"])), D("82500.00"))
+        check("impuesto tramo 1 = 8,250.00", D(str(det[0]["impuesto"])), D("8250.00"))
+        check("base del tramo 2 = 7,500.00", D(str(det[1]["base_soles"])), D("7500.00"))
+        check("impuesto tramo 2 = 2,212.50", D(str(det[1]["impuesto"])), D("2212.50"))
+    check("impuesto anual total = S/ 10,462.50", D(str(imp)), D("10462.50"))
+
+    # 4) Frontera: exactamente 15 UIT NO debe pagar el segundo tramo.
+    imp_frontera, det_frontera = trib.calcular_impuesto_anual(uit26 * D("15"), tramos, uit26)
+    check("frontera de 15 UIT: solo un tramo", len(det_frontera), 1)
+    check("frontera de 15 UIT: impuesto = S/ 8,250.00",
+          D(str(imp_frontera)), D("8250.00"))
+
+    # 5) Un sol de mas SI debe entrar al segundo tramo.
+    imp_sobre, det_sobre = trib.calcular_impuesto_anual(uit26 * D("15") + D("1"), tramos, uit26)
+    check("15 UIT + 1 sol: dos tramos", len(det_sobre), 2)
+    check("15 UIT + 1 sol: impuesto = 8,250.00 + 0.295 = 8,250.30",
+          D(str(imp_sobre)), D("8250.30"))
+
+    # 6) Renta baja: solo el primer tramo.
+    imp_bajo, _ = trib.calcular_impuesto_anual(D("50000.00"), tramos, uit26)
+    check("renta neta 50,000 (dentro del 1er tramo) = S/ 5,000.00",
+          D(str(imp_bajo)), D("5000.00"))
+
+    # 7) Sin tramos configurados el resultado debe ser referencial con aviso.
+    #    Se simula pasando la lista vacia, como hace ir_anual() cuando no hay tabla.
+    check("sin tramos: tramos_ir devuelve vacio para un regimen inexistente",
+          trib.tramos_ir("NRUS"), [])
+
+
+# ===========================================================================
 # Main
 # ===========================================================================
 def main():
@@ -741,6 +809,7 @@ def main():
         test_calculo_ventas()
         test_calculo_compras()
         test_ir_anual_tramos()
+        test_escala_oficial_rmt()
         test_catalogos()
         test_integracion()
     except Exception:

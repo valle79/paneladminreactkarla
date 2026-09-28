@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Icon from '../components/Icon';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { api, errMsg } from '../api';
@@ -219,7 +220,10 @@ export default function ResumenTributario() {
                 <Icon name="high-priority" size={15} />
                 <span>
                   <b>Tramos del IR anual no configurados.</b> {ir_anual.advertencia}{' '}
-                  El impuesto anual mostrado es referencial y no debe usarse para declarar.
+                  El impuesto anual mostrado es referencial y no debe usarse para declarar.{' '}
+                  <Link to="/config-tributaria" className="trib-banner-link">
+                    Configurar tramos
+                  </Link>
                 </span>
               </div>
             )}

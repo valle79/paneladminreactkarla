@@ -208,13 +208,16 @@ def listar_gastos(
             params.append(str(estado).upper())
         wh = "WHERE " + " AND ".join(conds)
 
-        page = max(1, page)
+        # Ojo: no reasignar `page`/`limit` aquí; Python los trataría como
+        # locales de run() y saltaría UnboundLocalError al leerse a sí mismos.
+        pagina = max(1, page)
+        limite = max(1, limit)
         total_row = db.fetch_one(f"SELECT COUNT(*)::int n FROM gastos_deducibles {wh}", params)
         total = total_row["n"] if total_row else 0
         rows = db.fetch_all(
             f"""SELECT * FROM gastos_deducibles {wh}
                 ORDER BY fecha_gasto DESC, id DESC
-                LIMIT {limit} OFFSET {(page - 1) * limit}""",
+                LIMIT {limite} OFFSET {(pagina - 1) * limite}""",
             params,
         )
         resumen_row = db.fetch_one(
@@ -514,6 +517,16 @@ def crear_tramo(payload: dict, actor: dict = Depends(require_permission("RESUMEN
     tasa = _dec(payload.get("tasa"), "tasa", minimo=0)
     if tasa > 1:
         raise HTTPException(status_code=400, detail="tasa debe estar entre 0 y 1")
+
+    # Un mismo regimen no puede tener dos tramos que empiecen en la misma UIT
+    # (uq_tramo). Se comprueba antes de insertar para devolver 400 y no un 500.
+    if db.fetch_one("SELECT id FROM ir_tramos WHERE regimen = %s AND desde_uit = %s",
+                    (regimen, desde)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ya existe un tramo de {regimen} que comienza en {desde} UIT. "
+                   f"Edita o elimina el existente.")
+
     row = db.execute(
         """INSERT INTO ir_tramos (regimen, desde_uit, hasta_uit, tasa, descripcion)
            VALUES (%s,%s,%s,%s,%s) RETURNING *""",
