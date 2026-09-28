@@ -63,7 +63,8 @@ DESTINO_COMPRA = ("PARA_CLIENTE", "STOCK", "MANTENIMIENTO",
                   "PRODUCCION_INTERNA", "USO_INTERNO", "OTRO")
 CLIENTE_TIPOS = ("RUC", "DNI")
 TRABAJO_TIPOS = ("PRODUCTO", "SERVICIO", "MANUAL")
-TIPO_COMPROBANTE = ("FACTURA", "BOLETA", "RECIBO", "NOTA_DE_VENTA", "OTRO")
+TIPO_COMPROBANTE = ("FACTURA", "RECIBO DE LUZ", "RECIBO DE AGUA", "RECIBO DE GAS",
+                    "PROFORMA", "BOLETA", "RECIBO", "NOTA_DE_VENTA", "OTRO")
 
 TRANSICIONES_EVENTO = {
     "BORRADOR": "COMPRA_CREADA",
@@ -728,7 +729,13 @@ def delete_supplier(supplier_id: int, actor: dict = Depends(require_permission("
 # ============================================================================
 
 def _apply_item_taxes(items, con_igv, tasa_impuesto):
-    """Calcula subtotal/impuesto/total por item (Decimal) y valida destino/cliente."""
+    """Calcula subtotal/impuesto/total por item (Decimal) y valida destino/cliente.
+
+    Convención de compras: el precio unitario se ingresa con IGV incluido.
+    - Subtotal = bruto * (1 - tasa) - descuento  (base sin IGV)
+    - Impuesto = bruto * tasa
+    - Total    = subtotal + impuesto
+    """
     valid_units = None
     out = []
     for it in items:
@@ -737,13 +744,17 @@ def _apply_item_taxes(items, con_igv, tasa_impuesto):
         if descuento < 0:
             descuento = Decimal("0")
         bruto = (precio * cantidad).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        subtotal = (bruto - descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        if subtotal < 0:
-            subtotal = Decimal("0.00")
         tasa = _dec(it.get("tasa_impuesto"), None)
         if tasa is None:
             tasa = _dec(tasa_impuesto, 0) if con_igv else Decimal("0")
-        impuesto = (subtotal * _r4(tasa)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if con_igv:
+            subtotal = (bruto * (Decimal("1") - _r4(tasa)) - descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            impuesto = (bruto * _r4(tasa)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        else:
+            subtotal = (bruto - descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            impuesto = Decimal("0.00")
+        if subtotal < 0:
+            subtotal = Decimal("0.00")
         total = (subtotal + impuesto).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         unidad = (it.get("unidad") or "UND").strip().upper() or "UND"

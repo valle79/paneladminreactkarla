@@ -43,7 +43,16 @@ const DESTINO_MAP = {
   OTRO: ['gray', 'Otro'],
 };
 
-const TIPO_COMPROBANTE_OPTS = ['FACTURA', 'BOLETA', 'RECIBO', 'NOTA_DE_VENTA', 'OTRO'];
+const TIPO_COMPROBANTE_OPTS = ['FACTURA', 'RECIBO DE LUZ', 'RECIBO DE AGUA', 'RECIBO DE GAS'];
+
+const CONDICIONES_PAGO_OPTS = [
+  { value: 'AL CONTADO', label: 'Al contado' },
+  { value: 'CREDITO 15 DIAS', label: 'Crédito 15 días' },
+  { value: 'CREDITO 30 DIAS', label: 'Crédito 30 días' },
+  { value: 'CREDITO 45 DIAS', label: 'Crédito 45 días' },
+  { value: 'CREDITO 60 DIAS', label: 'Crédito 60 días' },
+  { value: 'CREDITO 90 DIAS', label: 'Crédito 90 días' },
+];
 
 const DEFAULT_UNITS = [
   { code: 'UND', name: 'Unidad' }, { code: 'KG', name: 'Kilogramo' }, { code: 'GR', name: 'Gramo' },
@@ -51,6 +60,21 @@ const DEFAULT_UNITS = [
   { code: 'PAR', name: 'Par' }, { code: 'JGO', name: 'Juego' }, { code: 'CJ', name: 'Caja' },
   { code: 'PZA', name: 'Pieza' }, { code: 'SERV', name: 'Servicio' },
 ];
+
+const creditDaysOf = (condiciones) => {
+  const m = /^CREDITO\s+(\d+)\s+DIAS$/i.exec(String(condiciones || '').trim());
+  return m ? Number(m[1]) : null;
+};
+
+const addDaysToDate = (dateStr, days) => {
+  const [y, m, d] = String(dateStr || '').split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${dt.getFullYear()}-${mm}-${dd}`;
+};
 
 const SEARCH_KEYS = [
   (r) => r.codigo_compra,
@@ -187,7 +211,7 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
     numero_comprobante: '',
     con_igv: !isIntl,
     tasa_impuesto: '18',
-    condiciones_pago: '',
+    condiciones_pago: 'AL CONTADO',
     fecha_vencimiento: '',
     observaciones: '',
     cliente_tipo: '',
@@ -282,7 +306,49 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
     setForm((f) => ({ ...f, proveedor_query: q, proveedor_id: sel ? sel.id : '' }));
   };
 
-  const addItem = (kind) => setForm((f) => ({ ...f, items: [...f.items, blankItem(kind)] }));
+  const onCondicionesPagoChange = (value) => {
+    setForm((f) => {
+      const days = creditDaysOf(value);
+      if (days == null) return { ...f, condiciones_pago: value };
+      return { ...f, condiciones_pago: value, fecha_vencimiento: addDaysToDate(f.fecha_compra, days) };
+    });
+  };
+
+  const onFechaCompraChange = (value) => {
+    setForm((f) => {
+      const days = creditDaysOf(f.condiciones_pago);
+      if (days == null) return { ...f, fecha_compra: value };
+      return { ...f, fecha_compra: value, fecha_vencimiento: addDaysToDate(value, days) };
+    });
+  };
+
+  const itemCodePrefix = (kind) => (kind === 'pieza' ? 'P' : 'M');
+
+  const nextItemCode = (kind, items) => {
+    const prefix = itemCodePrefix(kind);
+    const sources = [
+      ...(kind === 'pieza' ? (piezas || []).map((p) => p.codigo) : []),
+      ...items.map((it) => it.codigo),
+    ];
+    const max = sources.reduce((acc, c) => {
+      const m = /^([a-z])-(\d+)$/i.exec(String(c || '').trim());
+      return m && m[1].toUpperCase() === prefix ? Math.max(acc, Number(m[2])) : acc;
+    }, 0);
+    return `${prefix}-${String(max + 1).padStart(4, '0')}`;
+  };
+
+  const codeMatchesKind = (code, kind) => {
+    const m = /^([a-z])-(\d+)$/i.exec(String(code || '').trim());
+    return !!m && m[1].toUpperCase() === itemCodePrefix(kind);
+  };
+
+  const addItem = (kind) => {
+    if (!['pieza', 'manual'].includes(kind)) return;
+    setForm((f) => {
+      const item = { ...blankItem(kind), codigo: nextItemCode(kind, f.items) };
+      return { ...f, items: [...f.items, item] };
+    });
+  };
 
   const removeItem = (idx) => setForm((f) => ({ ...f, items: f.items.filter((_, j) => j !== idx) }));
 
@@ -298,7 +364,7 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
         product_id: kind === 'product' ? found.id : it.product_id,
         spare_part_id: kind === 'spare' ? found.id : it.spare_part_id,
         pieza_id: kind === 'pieza' ? found.id : it.pieza_id,
-        codigo: found.codigo || found.code || it.codigo || '',
+        codigo: it.codigo || found.codigo || found.code || '',
         descripcion: found.name || found.descripcion || it.descripcion || '',
         precio_unitario: found.price != null ? String(found.price) : it.precio_unitario,
         unidad: it.unidad || 'UND',
@@ -306,15 +372,23 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
     }));
   };
 
-  const setItemKind = (idx, kind) => setForm((f) => ({
-    ...f,
-    items: f.items.map((it, j) => (j === idx ? { ...it, kind, product_id: '', spare_part_id: '', pieza_id: '' } : it)),
-  }));
+  const setItemKind = (idx, kind) => {
+    if (!['pieza', 'manual'].includes(kind)) return;
+    setForm((f) => ({
+      ...f,
+      items: f.items.map((it, j) => {
+        if (j !== idx) return it;
+        const next = { ...it, kind, product_id: '', spare_part_id: '', pieza_id: '' };
+        if (!codeMatchesKind(next.codigo, kind)) next.codigo = nextItemCode(kind, f.items);
+        return next;
+      }),
+    }));
+  };
 
   const [piezaTarget, setPiezaTarget] = useState(null);
 
   const openPiezaCreate = (idx) => {
-    setPiezaForm({ name: '', codigo: '', precio: '', unidad: 'UND' });
+    setPiezaForm({ name: '', codigo: nextItemCode('pieza', form?.items || []), precio: '', unidad: 'UND' });
     setPiezaTarget(idx);
     setPiezaModal(true);
   };
@@ -366,8 +440,9 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
       const precio = Math.max(0, Number(it.precio_unitario) || 0);
       const descuento = Math.max(0, Number(it.descuento) || 0);
       const bruto = cantidad * precio;
-      const subtotal = Math.max(0, bruto - descuento);
-      const impuesto = form.con_igv ? subtotal * tasa : 0;
+      const base = form.con_igv ? bruto * (1 - tasa) : bruto;
+      const subtotal = Math.max(0, base - descuento);
+      const impuesto = form.con_igv ? Math.max(0, bruto * tasa) : 0;
       const total = subtotal + impuesto;
       return { ...it, cantidad, precio, descuento, bruto, subtotal, impuesto, total };
     });
@@ -733,7 +808,7 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
               </div>
               <div className="field">
                 <label>Fecha de compra</label>
-                <input className="input" type="date" value={form.fecha_compra} onChange={(e) => setField('fecha_compra', e.target.value)} />
+                <input className="input" type="date" value={form.fecha_compra} onChange={(e) => onFechaCompraChange(e.target.value)} />
               </div>
               <div className="field">
                 <label>Moneda</label>
@@ -743,37 +818,15 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
               </div>
             </div>
 
-            {!!form && (
-              <div className="grid-3" style={{ marginTop: 2 }}>
-                <div className="field">
-                  <label>Cliente de la compra</label>
-                  <select className="select" value={form.cliente_tipo} onChange={(e) => { setField('cliente_tipo', e.target.value); setField('cliente_id', ''); }}>
-                    <option value="">— Ninguno —</option>
-                    <option value="RUC">Empresa (RUC)</option>
-                    <option value="DNI">Persona (DNI)</option>
-                  </select>
-                </div>
-                <div className="field" style={{ gridColumn: 'span 2' }}>
-                  <label>Cliente vinculado (opcional)</label>
-                  <select
-                    className="select"
-                    value={form.cliente_id}
-                    onChange={(e) => setField('cliente_id', e.target.value)}
-                    disabled={!form.cliente_tipo}
-                  >
-                    <option value="">— Seleccionar cliente —</option>
-                    {form.cliente_tipo && clienteOpciones(form.cliente_tipo).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-                  </select>
-                </div>
-              </div>
-            )}
-
             {!isIntl && (
               <div className="grid-3">
                 <div className="field">
                   <label>Comprobante <span className="req">*</span></label>
                   <select className="select" value={form.tipo_comprobante} onChange={(e) => setField('tipo_comprobante', e.target.value)}>
-                    {TIPO_COMPROBANTE_OPTS.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                    {TIPO_COMPROBANTE_OPTS.map((t) => <option key={t} value={t}>{t}</option>)}
+                    {form.tipo_comprobante && !TIPO_COMPROBANTE_OPTS.includes(form.tipo_comprobante) && (
+                      <option value={form.tipo_comprobante}>{form.tipo_comprobante}</option>
+                    )}
                   </select>
                 </div>
                 <div className="field">
@@ -794,7 +847,12 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
               </div>
               <div className="field">
                 <label>Condiciones de pago</label>
-                <input className="input" placeholder="Ej. Contado, 30 días" value={form.condiciones_pago} onChange={(e) => setField('condiciones_pago', e.target.value)} />
+                <select className="select" value={form.condiciones_pago} onChange={(e) => onCondicionesPagoChange(e.target.value)}>
+                  {CONDICIONES_PAGO_OPTS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  {form.condiciones_pago && !CONDICIONES_PAGO_OPTS.some((c) => c.value === form.condiciones_pago) && (
+                    <option value={form.condiciones_pago}>{form.condiciones_pago}</option>
+                  )}
+                </select>
               </div>
               <div className="field">
                 <label>Fecha de vencimiento</label>
@@ -834,8 +892,8 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
                   <div key={idx} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 10, marginBottom: 8, minWidth: 560 }}>
                     <div className="flex" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
                       <select className="select" style={{ width: 140 }} value={it.kind} onChange={(e) => setItemKind(idx, e.target.value)}>
-                        <option value="product">Producto</option>
-                        <option value="spare">Repuesto</option>
+                        {it.kind === 'product' && <option value="product">Producto</option>}
+                        {it.kind === 'spare' && <option value="spare">Repuesto</option>}
                         <option value="pieza">Pieza</option>
                         <option value="manual">Manual</option>
                       </select>
@@ -894,12 +952,6 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
                         <label>Destino <span className="req">*</span></label>
                         <select className="select" value={it.destino} onChange={(e) => setItemField(idx, 'destino', e.target.value)}>
                           {Object.keys(DESTINO_MAP).map((d) => <option key={d} value={d}>{DESTINO_MAP[d][1]}</option>)}
-                        </select>
-                      </div>
-                      <div className="field" style={{ margin: 0, flex: 1, minWidth: 130 }}>
-                        <label>Unidad <span className="req">*</span></label>
-                        <select className="select" value={it.unidad} onChange={(e) => setItemField(idx, 'unidad', e.target.value)}>
-                          {(units || DEFAULT_UNITS).map((u) => <option key={u.code || u} value={u.code || u}>{u.name || u}</option>)}
                         </select>
                       </div>
                       {it.destino === 'PARA_CLIENTE' && (
@@ -972,8 +1024,6 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
                 ))}
               </div>
               <div className="flex" style={{ gap: 8, flexWrap: 'wrap' }}>
-                <button className="btn btn-outline btn-sm" onClick={() => addItem('product')}><Icon name="plus" size={13} /> Producto</button>
-                <button className="btn btn-outline btn-sm" onClick={() => addItem('spare')}><Icon name="plus" size={13} /> Repuesto</button>
                 <button className="btn btn-outline btn-sm" onClick={() => addItem('pieza')}><Icon name="plus" size={13} /> Pieza</button>
                 <button className="btn btn-outline btn-sm" onClick={() => addItem('manual')}><Icon name="plus" size={13} /> Item manual</button>
               </div>
