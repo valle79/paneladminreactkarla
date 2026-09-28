@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 import db
 import rbac
+import tributario as trib
 from auth import require_permission
 
 router = APIRouter(prefix="/api", tags=["compras"])
@@ -64,7 +65,7 @@ DESTINO_COMPRA = ("PARA_CLIENTE", "STOCK", "MANTENIMIENTO",
 CLIENTE_TIPOS = ("RUC", "DNI")
 TRABAJO_TIPOS = ("PRODUCTO", "SERVICIO", "MANUAL")
 TIPO_COMPROBANTE = ("FACTURA", "RECIBO DE LUZ", "RECIBO DE AGUA", "RECIBO DE GAS",
-                    "PROFORMA", "BOLETA", "RECIBO", "NOTA_DE_VENTA", "OTRO")
+                    "PROFORMA", "BOLETA", "RECIBO", "NOTA DE VENTA", "OTRO")
 
 TRANSICIONES_EVENTO = {
     "BORRADOR": "COMPRA_CREADA",
@@ -111,12 +112,66 @@ def _dec_int(v):
 
 
 def _validate_comprobante(payload):
-    tipo = _str_upper(payload.get("tipo_comprobante")) or "FACTURA"
+    tipo = trib.norm_tipo_comprobante(_str_upper(payload.get("tipo_comprobante"))) or "FACTURA"
     if tipo not in TIPO_COMPROBANTE:
-        raise HTTPException(status_code=400, detail="tipo_comprobante inválido")
+        raise HTTPException(
+            status_code=400,
+            detail=f"tipo_comprobante inválido. Valores admitidos: "
+                   f"{', '.join(TIPO_COMPROBANTE)}.",
+        )
     serie = str(payload.get("serie_comprobante") or "").strip() or None
     numero = str(payload.get("numero_comprobante") or "").strip() or None
     return tipo, serie, numero
+
+
+def _check_comprobante_duplicado(cur, proveedor_id, tipo, serie, numero, excluir_id=None):
+    """Rechaza comprobantes de compra repetidos del mismo proveedor.
+
+    Un comprobante repetido se contaría dos veces en el crédito fiscal del
+    IGV. La base tiene además un índice único parcial que lo impide a nivel
+    de motor; aquí se da el mensaje de error claro al usuario.
+    """
+    if not numero:
+        return
+    sql = ("SELECT id, codigo_compra FROM purchases "
+           "WHERE NOT deleted AND proveedor_id = %s "
+           "AND UPPER(TRIM(REPLACE(COALESCE(tipo_comprobante,''), '_', ' '))) = %s "
+           "AND COALESCE(serie_comprobante,'') = COALESCE(%s,'') "
+           "AND numero_comprobante = %s")
+    params = [proveedor_id, tipo, serie, numero]
+    if excluir_id:
+        sql += " AND id <> %s"
+        params.append(excluir_id)
+    cur.execute(sql + " LIMIT 1", params)
+    dup = cur.fetchone()
+    if dup:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El comprobante {tipo} {serie or ''}-{numero} ya fue registrado "
+                   f"en la compra {dup['codigo_compra']}. Registrarlo de nuevo "
+                   f"duplicaría el crédito fiscal del IGV.",
+        )
+
+
+def _advertir_credito_fiscal(tipo, estado):
+    """Advierte cuando el comprobante no va a generar crédito fiscal."""
+    t = trib.norm_tipo_comprobante(tipo)
+    e = _str_upper(estado)
+    es_comprobante_ok = t in trib.COMPRAS_IGV_TIPOS
+    es_estado_ok = e in _estados_credito_fiscal()
+    return {
+        "genera_credito_fiscal": es_comprobante_ok and es_estado_ok,
+        "motivo": (
+            None if (es_comprobante_ok and es_estado_ok)
+            else (
+                f"El comprobante {tipo} no genera crédito fiscal. Solo "
+                f"{', '.join(trib.COMPRAS_IGV_TIPOS)} lo generan."
+                if not es_comprobante_ok else
+                f"La compra en estado {estado} no genera crédito fiscal hasta "
+                f"recibirse ({', '.join(_estados_credito_fiscal())})."
+            )
+        ),
+    }
 
 
 def _guard(fn):
@@ -148,7 +203,8 @@ def _history(conn, cur, purchase_id, evento, previo, nuevo, descripcion, actor, 
 # CONFIGURACIÓN TRIBUTARIA (centralizada en settings)
 # ============================================================================
 
-_SETTINGS_WHITELIST = {"igv_rate", "igv_name", "base_currency", "purchase_prefix", "ir_regime", "ir_rate"}
+_SETTINGS_WHITELIST = {"igv_rate", "igv_name", "base_currency", "purchase_prefix",
+                      "ir_regime", "ir_rate", "purchase_credit_states"}
 
 
 def _get_setting(key, default):
@@ -172,6 +228,7 @@ def _parse_setting(key, value, default):
 
 
 def _settings_dict():
+    """Ajustes de configuración del módulo de compras."""
     rows = db.fetch_all("SELECT key, value FROM settings")
     out = {
         "igv_rate": 0.18,
@@ -180,6 +237,7 @@ def _settings_dict():
         "purchase_prefix": "CP",
         "ir_regime": "RMT",
         "ir_rate": 0.01,
+        "purchase_credit_states": ",".join(trib.ESTADOS_COMPRA_CREDITO),
     }
     for r in rows:
         if r["key"] in out:
@@ -188,7 +246,13 @@ def _settings_dict():
 
 
 def _igv_rate():
-    return float(_get_setting("igv_rate", "0.18")) or 0.18
+    """Tasa de IGV compartida con ventas y el resumen tributario."""
+    return float(trib.igv_rate())
+
+
+def _estados_credito_fiscal():
+    """Estados de compra que generan crédito fiscal (configurable)."""
+    return list(trib.config()["purchase_credit_states"])
 
 
 # ============================================================================
@@ -455,6 +519,14 @@ def _serialize_purchase(conn, row, actor=None):
             if ri.get("purchase_item_id") in pendiente:
                 pendiente[ri["purchase_item_id"]] -= _dec(ri["cantidad_recibida"])
     p["reception_pending"] = {str(k): float(v) for k, v in pendiente.items()}
+
+    # Estado fiscal: ¿esta compra genera crédito fiscal del IGV y por qué no?
+    p["fiscal"] = _advertir_credito_fiscal(
+        _str_upper(p.get("tipo_comprobante")) or "FACTURA",
+        _str_upper(p.get("estado")) or "BORRADOR",
+    )
+    p["fiscal"]["credito_igv"] = float(_dec(p.get("impuestos"), 0)) \
+        if p["fiscal"]["genera_credito_fiscal"] else 0.0
     return p
 
 
@@ -734,30 +806,37 @@ def _apply_item_taxes(items, con_igv, tasa_impuesto):
     """Calcula subtotal/impuesto/total por item (Decimal) y valida destino/cliente.
 
     Convención de compras: el precio unitario se ingresa con IGV incluido.
-    - Subtotal = bruto * (1 - tasa) - descuento  (base sin IGV)
-    - Impuesto = bruto * tasa
-    - Total    = subtotal + impuesto
+        bruto    = cantidad × precio_unitario
+        neto     = bruto − descuento
+        subtotal = con IGV ? neto / (1 + tasa) : neto      (base imponible)
+        impuesto = con IGV ? neto − subtotal : 0
+        total    = subtotal + impuesto                     (= neto)
+
+    El descuento reduce la BASE IMPONIBLE y el IGV se recalcula sobre ella.
+    Antes se restaba el descuento de la base pero el IGV se cobraba sobre el
+    bruto, de modo que `total ≠ base + impuesto` y el crédito fiscal era
+    incorrecto. Ahora la invariante se cumple siempre.
     """
     valid_units = None
     out = []
     for it in items:
         cantidad, precio = _validate_item_raw(it)
-        descuento = _dec(it.get("descuento"), 0)
-        if descuento < 0:
-            descuento = Decimal("0")
-        bruto = (precio * cantidad).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         tasa = _dec(it.get("tasa_impuesto"), None)
         if tasa is None:
             tasa = _dec(tasa_impuesto, 0) if con_igv else Decimal("0")
-        if con_igv:
-            subtotal = (bruto * (Decimal("1") - _r4(tasa)) - descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            impuesto = (bruto * _r4(tasa)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        else:
-            subtotal = (bruto - descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            impuesto = Decimal("0.00")
-        if subtotal < 0:
-            subtotal = Decimal("0.00")
-        total = (subtotal + impuesto).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if con_igv and tasa < 0:
+            raise HTTPException(status_code=400, detail="tasa_impuesto no puede ser negativo")
+
+        computo = trib.calcular_items_compra(
+            [{"cantidad": cantidad, "precio_unitario": precio, "descuento": it.get("descuento", 0)}],
+            con_igv, tasa,
+        )[0]
+        subtotal = computo["subtotal"]
+        impuesto = computo["impuesto"]
+        total = computo["total"]
+        # Descuento efectivo: acotado al bruto, nunca negativo.
+        bruto = _r2(precio * cantidad)
+        descuento = _r2(min(max(_dec(it.get("descuento"), 0), Decimal("0")), bruto))
 
         unidad = (it.get("unidad") or "UND").strip().upper() or "UND"
         if valid_units is None:
@@ -940,6 +1019,15 @@ def _create_purchase_impl(conn, payload, actor):
         cliente_id = _dec_int(payload.get("cliente_id"))
         if cliente_id and cliente_tipo not in ("RUC", "DNI"):
             raise HTTPException(status_code=400, detail="cliente_tipo debe ser RUC o DNI cuando vinculaste un cliente")
+
+        estado = _str_upper(payload.get("estado")) or "BORRADOR"
+        if estado not in ESTADO_COMPRA:
+            estado = "BORRADOR"
+
+        # El mismo comprobante del mismo proveedor no puede repetirse:
+        # duplicaría el crédito fiscal del IGV.
+        _check_comprobante_duplicado(cur, proveedor_id, comprobante[0], comprobante[1], comprobante[2])
+
         cur.execute(
             """INSERT INTO purchases
                (codigo_compra, tipo_compra, proveedor_id, fecha_compra, moneda, tipo_cambio,
@@ -959,9 +1047,6 @@ def _create_purchase_impl(conn, payload, actor):
         purchase = dict(cur.fetchone())
         purchase_id = purchase["id"]
 
-        estado = _str_upper(payload.get("estado")) or "BORRADOR"
-        if estado not in ESTADO_COMPRA:
-            estado = "BORRADOR"
         cur.execute("UPDATE purchases SET estado = %s, subtotal = %s, impuestos = %s, total = %s "
                     "WHERE id = %s", (estado, 0, 0, 0, purchase_id))
 
@@ -1404,6 +1489,14 @@ def update_purchase(purchase_id: int, payload: dict, actor: dict = Depends(requi
                     header["tipo_comprobante"] = tc_doc
                     header["serie_comprobante"] = serie
                     header["numero_comprobante"] = numero
+                    _check_comprobante_duplicado(
+                        cur,
+                        header.get("proveedor_id") or existing["proveedor_id"],
+                        tc_doc,
+                        serie if "serie_comprobante" in header else existing.get("serie_comprobante"),
+                        numero if "numero_comprobante" in header else existing.get("numero_comprobante"),
+                        excluir_id=purchase_id,
+                    )
                 if "cliente_tipo" in payload or "cliente_id" in payload:
                     ct = _str_upper(payload.get("cliente_tipo")) if payload.get("cliente_tipo") not in (None, "") else None
                     ci = _dec_int(payload.get("cliente_id"))

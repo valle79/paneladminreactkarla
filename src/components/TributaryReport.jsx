@@ -19,12 +19,25 @@ const REGIMEN_LABEL = {
   NRUS: 'Nuevo RUS (NRUS)',
 };
 
+const CATEGORIA_LABEL = {
+  COMPRA_MERCADERIA: 'Compra de mercadería',
+  SERVICIOS: 'Servicios',
+  ALQUILER: 'Alquiler',
+  TRANSPORTE: 'Transporte',
+  SERVICIOS_PROFESIONALES: 'Servicios profesionales',
+  GASTOS_BANCARIOS: 'Gastos bancarios',
+  OTROS_GASTOS: 'Otros gastos',
+};
+
 function TributaryReport(
   { data = null, anio = '', mes = null, user = null },
   ref
 ) {
   if (!data) return null;
-  const { resumen = {}, detalle_igv = {}, detalle_ir = {}, config = {}, annual = [] } = data;
+  const {
+    resumen = {}, detalle_igv = {}, detalle_ir = {}, config = {},
+    annual = [], ir_anual: irAnual = {}, gastos_deducibles_detalle: gastosDetalle = [],
+  } = data;
 
   const periodoLabel = mes
     ? `${MESES[mes - 1]} de ${anio}`
@@ -32,6 +45,10 @@ function TributaryReport(
 
   const regimenLabel = REGIMEN_LABEL[config.ir_regime] || `Régimen ${config.ir_regime || 'RMT'}`;
   const tasaPct = Number(detalle_ir.tasa || 0) * 100;
+  const tiposVentas = (config.ventas_igv_tipos || ['FACTURA', 'BOLETA']).join(' y ');
+  const tiposCompras = (config.compras_igv_tipos || ['FACTURA']).join(', ');
+  const hayAnual = Number(irAnual.ingresos_netos || 0) > 0;
+  const saldoLabel = irAnual.resultado === 'A_FAVOR' ? 'Saldo a favor' : 'Saldo a pagar';
 
   const generado = new Date();
   const generadoStr =
@@ -131,8 +148,8 @@ function TributaryReport(
             <tr>
               <td colSpan={2} style={{ fontSize: 12, fontWeight: 800, background: '#f0f5f1' }}>Detalle del IGV</td>
             </tr>
-            <tr><td>IGV de ventas (Facturas + Boletas)</td><td className="num">{money(detalle_igv.igv_ventas)}</td></tr>
-            <tr><td>IGV de compras (crédito fiscal, solo FACTURAS)</td><td className="num">{money(detalle_igv.igv_compras)}</td></tr>
+            <tr><td>IGV de ventas ({tiposVentas}, estado fiscal válido)</td><td className="num">{money(detalle_igv.igv_ventas)}</td></tr>
+            <tr><td>IGV de compras (crédito fiscal: {tiposCompras})</td><td className="num">{money(detalle_igv.igv_compras)}</td></tr>
             <tr><td><b>IGV por pagar</b></td><td className="num"><b>{money(detalle_igv.igv_por_pagar)}</b></td></tr>
             {Number(detalle_igv.saldo_a_favor) > 0 && (
               <tr><td>Saldo a favor</td><td className="num">{money(detalle_igv.saldo_a_favor)}</td></tr>
@@ -142,16 +159,71 @@ function TributaryReport(
             </tr>
             <tr><td>Régimen: {regimenLabel}</td><td className="num">Tasa {tasaPct.toLocaleString('es-PE')}%</td></tr>
             <tr><td>Ingresos netos (base imponible)</td><td className="num">{money(detalle_ir.ingresos_netos)}</td></tr>
+            <tr><td>Pago a cuenta calculado</td><td className="num">{money(detalle_ir.pago_cuenta_calculado)}</td></tr>
+            <tr><td>Pago a cuenta pagado (registrado)</td><td className="num">{money(detalle_ir.pago_cuenta_pagado)}</td></tr>
             <tr><td><b>Pago a cuenta del IR</b></td><td className="num"><b>{money(detalle_ir.pago_cuenta)}</b></td></tr>
+
+            {gastosDetalle.length > 0 && (
+              <>
+                <tr>
+                  <td colSpan={2} style={{ fontSize: 12, fontWeight: 800, background: '#f0f5f1' }}>
+                    Gastos deducibles por naturaleza
+                  </td>
+                </tr>
+                {gastosDetalle.map((g) => (
+                  <tr key={g.categoria}>
+                    <td>{CATEGORIA_LABEL[g.categoria] || g.categoria} ({g.count} doc.)</td>
+                    <td className="num">{money(g.total)}</td>
+                  </tr>
+                ))}
+                <tr><td><b>Total deducible</b></td><td className="num"><b>{money(resumen.gastos_deducibles)}</b></td></tr>
+              </>
+            )}
+
+            {hayAnual && (
+              <>
+                <tr>
+                  <td colSpan={2} style={{ fontSize: 12, fontWeight: 800, background: '#f0f5f1' }}>
+                    Declaración anual del IR{irAnual.tramos_referencia ? ' (referencial, no oficial)' : ''}
+                  </td>
+                </tr>
+                <tr><td>Ingresos netos del año</td><td className="num">{money(irAnual.ingresos_netos)}</td></tr>
+                <tr><td>(−) Gastos deducibles</td><td className="num">−{money(irAnual.gastos_deducibles)}</td></tr>
+                <tr><td><b>Renta neta</b></td><td className="num"><b>{money(irAnual.renta_neta)}</b></td></tr>
+                <tr><td>UIT {irAnual.anio}</td><td className="num">{money(irAnual.valor_uit)}</td></tr>
+                {(irAnual.tramos || []).map((t, i) => (
+                  <tr key={i}>
+                    <td>
+                      {t.hasta_uit != null
+                        ? `Tramo ${t.desde_uit}–${t.hasta_uit} UIT`
+                        : `Tramo desde ${t.desde_uit} UIT`}
+                      {' · base '}{money(t.base_soles)}{' · '}{(Number(t.tasa) * 100).toLocaleString('es-PE')}%
+                    </td>
+                    <td className="num">{money(t.impuesto)}</td>
+                  </tr>
+                ))}
+                <tr><td>Impuesto anual</td><td className="num">{money(irAnual.impuesto_anual)}</td></tr>
+                <tr><td>(−) Pagos a cuenta del año</td><td className="num">−{money(irAnual.pagos_a_cuenta)}</td></tr>
+                <tr><td><b>{saldoLabel}</b></td><td className="num"><b>{money(irAnual.saldo)}</b></td></tr>
+              </>
+            )}
           </tbody>
         </table>
       </div>
 
+      {hayAnual && irAnual.tramos_referencia && (
+        <div className="sr-foot-note" style={{ marginTop: 10, color: '#8a6400' }}>
+          <b>Advertencia:</b> {irAnual.advertencia}
+        </div>
+      )}
+
       <div className="sr-foot">
         <div className="sr-foot-note">
           Reporte generado el {generadoStr}. Resumen informativo basado en los comprobantes registrados: IGV de ventas por
-          FACTURAS y BOLETAS; crédito fiscal por compras con comprobante FACTURA. El pago a cuenta del IR se estima sobre
-          los ingresos netos ({regimenLabel}). Este documento no sustituye las declaraciones ni los pagos ante SUNAT.
+          {` ${tiposVentas}`} en estado fiscal válido; crédito fiscal por compras con comprobante{` ${tiposCompras}`}
+          {' '}recibidas. El pago a cuenta del IR se calcula sobre los ingresos netos ({regimenLabel}). Los gastos
+          deducibles son los registrados explícitamente con su naturaleza y sustento. Este documento no sustituye las
+          declaraciones ni los pagos ante SUNAT.
         </div>
         <div className="sr-sign">
           <div className="sr-sign-name">{user?.name || COMPANY.seller.name}</div>

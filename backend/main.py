@@ -26,6 +26,7 @@ import whatsapp
 import admin_users
 import purchases
 import resumen_tributario
+import tributario as trib
 from auth import create_token, require_auth, get_current_user, require_permission
 import password as pw
 
@@ -202,8 +203,24 @@ def consultar_ruc_endpoint(payload: RucConsultaRequest, _: dict = Depends(requir
 # ============================================================================
 
 @app.get("/api/stats")
-def get_stats(_: dict = Depends(require_permission("STATS_VIEW"))):
+def get_stats(
+    anio: int = None,
+    mes: int = None,
+    _: dict = Depends(require_permission("STATS_VIEW")),
+):
+    """Indicadores del dashboard.
+
+    El IGV de las tarjetas viene de `tributario` (misma fuente de verdad que
+    el resumen tributario y que los comprobantes). Antes se calculaba con
+    reglas propias y contrarias: contaba proformas y cotizaciones como IGV
+    débito y tomaba todo tipo de comprobante de compra.
+    """
     def stats():
+        hoy = date.today()
+        anio_ef = int(anio) if anio else hoy.year
+        if mes is not None and not 1 <= int(mes) <= 12:
+            raise HTTPException(status_code=400, detail="mes debe estar entre 1 y 12")
+
         conn = db.get_conn()
         try:
             with conn.cursor() as cur:
@@ -217,12 +234,11 @@ def get_stats(_: dict = Depends(require_permission("STATS_VIEW"))):
                          (SELECT COUNT(*)::int FROM sales WHERE NOT deleted) sales,
                          (SELECT COUNT(*)::int FROM promotions WHERE is_active) promotions,
                          (SELECT COALESCE(SUM(subtotal),0)::float FROM sales WHERE NOT deleted AND payment_status <> 'por_pagar') subtotal,
-                         (SELECT COALESCE(SUM(igv),0)::float FROM sales WHERE NOT deleted AND payment_status <> 'por_pagar') igv,
                          (SELECT COALESCE(SUM(total),0)::float FROM sales WHERE NOT deleted AND payment_status <> 'por_pagar') total"""
                 )
                 row = cur.fetchone()
                 cur.execute(
-                    """SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') mes,
+                    """SELECT to_char(date_trunc('month', COALESCE(fecha_emision, created_at)), 'YYYY-MM') mes,
                               COALESCE(SUM(total),0)::float total
                        FROM sales WHERE NOT deleted
                        GROUP BY 1 ORDER BY 1 DESC LIMIT 6"""
@@ -230,12 +246,24 @@ def get_stats(_: dict = Depends(require_permission("STATS_VIEW"))):
                 monthly = [dict(r) for r in cur.fetchall()]
                 cur.execute(
                     """SELECT id, invoice_type, invoice_number, total,
-                              payment_status, payment_date, created_at
-                       FROM sales WHERE NOT deleted ORDER BY created_at DESC LIMIT 5"""
+                              payment_status, payment_date, estado_fiscal,
+                              created_at, fecha_emision
+                       FROM sales WHERE NOT deleted
+                       ORDER BY COALESCE(fecha_emision, created_at) DESC, id DESC LIMIT 5"""
                 )
                 recent = [dict(r) for r in cur.fetchall()]
+                for r in recent:
+                    if r.get("fecha_emision"):
+                        r["fecha_emision"] = r["fecha_emision"].isoformat()
         finally:
             db.close_conn(conn)
+
+        # IGV del período: fuente única (tributario).
+        try:
+            trib_periodo = trib.dashboard(anio_ef, int(mes) if mes else None)
+        except Exception:
+            trib_periodo = None
+
         return {
             "counts": {
                 "advisors": row["advisors"],
@@ -248,9 +276,10 @@ def get_stats(_: dict = Depends(require_permission("STATS_VIEW"))):
             },
             "totals": {
                 "subtotal": row["subtotal"],
-                "igv": row["igv"],
+                "igv": (trib_periodo or {}).get("igv", 0.0),
                 "total": row["total"],
             },
+            "tributario": trib_periodo,
             "monthly": monthly,
             "recent": recent,
         }
@@ -1057,6 +1086,98 @@ def _serialize_sale(row: dict) -> dict:
     return _serialize_sales([row])[0]
 
 
+# ============================================================================
+# VENTAS — cálculo tributario autoritativo (el servidor manda)
+# ============================================================================
+# El `subtotal`, `igv` y `total` que envía el frontend NUNCA se guardan tal
+# cual: se recalculan aquí desde los ítems. Antes el backend aceptaba los
+# importes del navegador, así que cualquier manipulated del request guardaba
+# comprobantes donde base imponible + IGV ≠ total y el IGV declarado no
+# cuadraba con los ítems reales del documento.
+
+TIPO_FACTURA = "FACTURA"
+
+
+def _validar_fecha_emision(valor, por_defecto=None):
+    """Valida la fecha de emisión del comprobante (YYYY-MM-DD)."""
+    if valor in (None, ""):
+        return por_defecto
+    texto = str(valor).strip()
+    try:
+        from datetime import datetime as _dt
+        return _dt.strptime(texto, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="fecha_emision debe tener formato YYYY-MM-DD")
+
+
+def _preparar_venta(cur, payload, venta_existente=None):
+    """Normaliza y valida una venta, y devuelve sus importes calculados.
+
+    Devuelve un dict con los valores a persistir. Lanza HTTPException 400 si
+    el documento es inconsistente.
+    """
+    tipo = (payload.get("invoice_type") or (venta_existente or {}).get("invoice_type") or "").strip().lower()
+    if not tipo:
+        raise HTTPException(status_code=400, detail="invoice_type es obligatorio")
+    if tipo not in ("factura", "boleta", "proforma", "cotizacion"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"invoice_type inválido: {tipo}. Use factura, boleta, proforma o cotizacion.",
+        )
+
+    items = payload.get("items") or []
+    with_igv = bool(payload.get("with_igv", (venta_existente or {}).get("with_igv") or False))
+
+    # Descuento: si no viene explícito pero sí el tipo/valor, se recalcula
+    # igual que el frontend para que documento y pantalla coincidan.
+    discount_amount = payload.get("discount_amount")
+    discount_type = payload.get("discount_type", (venta_existente or {}).get("discount_type")) or None
+    discount_value = payload.get("discount_value", (venta_existente or {}).get("discount_value")) or 0
+    if discount_amount in (None, ""):
+        if discount_type and float(discount_value or 0) > 0:
+            v = float(discount_value)
+            discount_amount = (v / 100.0) if discount_type == "porcentaje" else v
+        else:
+            discount_amount = 0
+
+    subtotal, igv, total, _bruto, _desc = trib.calcular_ventas(
+        items, with_igv, discount_amount, trib.igv_rate())
+
+    # Invariante fiscal: el documento siempre cuadra.
+    if trib.r2(subtotal + igv) != trib.r2(total):
+        raise HTTPException(
+            status_code=400,
+            detail="Error de cálculo tributario: base imponible + IGV no coincide con el total",
+        )
+
+    fecha_emision = _validar_fecha_emision(
+        payload.get("fecha_emision", (venta_existente or {}).get("fecha_emision")),
+        (venta_existente or {}).get("fecha_emision") or date.today(),
+    )
+
+    estado_fiscal = str(
+        payload.get("estado_fiscal", (venta_existente or {}).get("estado_fiscal")) or "VALIDO"
+    ).strip().upper()
+    if estado_fiscal not in trib.ESTADOS_FISCALES:
+        raise HTTPException(
+            status_code=400,
+            detail="estado_fiscal inválido. Opciones: " + ", ".join(trib.ESTADOS_FISCALES),
+        )
+
+    return {
+        "invoice_type": tipo,
+        "with_igv": with_igv,
+        "subtotal": subtotal,
+        "igv": igv,
+        "total": total,
+        "discount_type": discount_type,
+        "discount_value": discount_value,
+        "discount_amount": _desc,
+        "fecha_emision": fecha_emision,
+        "estado_fiscal": estado_fiscal,
+    }
+
+
 @app.get("/api/sales")
 def list_sales(
     include_deleted: bool = False,
@@ -1064,6 +1185,7 @@ def list_sales(
     limit: int = 50,
     date_from: str = None,
     date_to: str = None,
+    estado_fiscal: str = None,
     _: dict = Depends(require_permission("SALES_VIEW")),
 ):
     def valid_date(v: str) -> bool:
@@ -1077,16 +1199,22 @@ def list_sales(
     def run():
         conds = [] if include_deleted else ["NOT deleted"]
         params: list = []
+        # El filtro de fechas usa la fecha de EMISIÓN del comprobante (no la
+        # de creación del registro): así el períodoReportedo es el real.
+        col_fecha = "COALESCE(s.fecha_emision, s.created_at::date)"
         if date_from:
             if not valid_date(date_from):
                 raise HTTPException(status_code=400, detail="date_from debe tener formato YYYY-MM-DD")
-            conds.append("created_at::date >= %s")
+            conds.append(f"{col_fecha} >= %s")
             params.append(date_from)
         if date_to:
             if not valid_date(date_to):
                 raise HTTPException(status_code=400, detail="date_to debe tener formato YYYY-MM-DD")
-            conds.append("created_at::date <= %s")
+            conds.append(f"{col_fecha} <= %s")
             params.append(date_to)
+        if estado_fiscal:
+            conds.append("s.estado_fiscal = %s")
+            params.append(str(estado_fiscal).strip().upper())
 
         wh = f"WHERE {' AND '.join(conds)}" if conds else ""
 
@@ -1118,11 +1246,17 @@ def list_sales(
 
 @app.get("/api/sales/next-number")
 def next_sale_number(invoice_type: str, _: dict = Depends(require_permission("SALES_VIEW"))):
+    """Siguiente correlativo por tipo de documento.
+
+    Considera TODOS los registros (incluidos anulados y eliminados): un
+    número de comprobante no se reutiliza jamás, porque el correlativo de
+    SUNAT es irreversible.
+    """
     def run():
         row = db.fetch_one(
             "SELECT COALESCE(MAX(invoice_number), 0) AS max_n FROM sales "
-            "WHERE invoice_type = %s AND NOT deleted",
-            (invoice_type,),
+            "WHERE invoice_type = %s",
+            (str(invoice_type or "").strip().lower(),),
         )
         return {"next_number": int(row["max_n"]) + 1}
     return _conn_or_400(run)
@@ -1168,10 +1302,12 @@ def create_sale(payload: dict, actor: dict = Depends(require_permission("SALES_C
         conn = db.get_conn()
         try:
             with conn.cursor() as cur:
+                venta = _preparar_venta(cur, payload)
+
                 cur.execute(
                     "SELECT COALESCE(MAX(invoice_number), 0) AS max_n FROM sales "
-                    "WHERE invoice_type = %s AND NOT deleted",
-                    (payload.get("invoice_type"),),
+                    "WHERE invoice_type = %s",
+                    (venta["invoice_type"],),
                 )
                 max_n = cur.fetchone()["max_n"]
 
@@ -1181,7 +1317,7 @@ def create_sale(payload: dict, actor: dict = Depends(require_permission("SALES_C
                     invoice_number = int(payload["invoice_number"])
                     cur.execute(
                         "SELECT id FROM sales WHERE invoice_type = %s AND invoice_number = %s AND NOT deleted",
-                        (payload.get("invoice_type"), invoice_number),
+                        (venta["invoice_type"], invoice_number),
                     )
                     if cur.fetchone():
                         raise HTTPException(
@@ -1193,14 +1329,17 @@ def create_sale(payload: dict, actor: dict = Depends(require_permission("SALES_C
                     "client_id": payload.get("client_id"),
                     "client_type": payload.get("client_type"),
                     "advisor_id": payload.get("advisor_id"),
-                    "with_igv": bool(payload.get("with_igv", False)),
-                    "subtotal": payload.get("subtotal", 0),
-                    "igv": payload.get("igv", 0),
-                    "total": payload.get("total", 0),
-                    "discount_type": payload.get("discount_type") or None,
-                    "discount_value": payload.get("discount_value", 0) or 0,
-                    "discount_amount": payload.get("discount_amount", 0) or 0,
-                    "invoice_type": payload.get("invoice_type"),
+                    # Importes: los calcula el servidor (tributario.calcular_ventas).
+                    "with_igv": venta["with_igv"],
+                    "subtotal": venta["subtotal"],
+                    "igv": venta["igv"],
+                    "total": venta["total"],
+                    "discount_type": venta["discount_type"],
+                    "discount_value": venta["discount_value"],
+                    "discount_amount": venta["discount_amount"],
+                    "fecha_emision": venta["fecha_emision"],
+                    "estado_fiscal": venta["estado_fiscal"],
+                    "invoice_type": venta["invoice_type"],
                     "invoice_number": invoice_number,
                     "share_token": uuid.uuid4().hex,
                     "payment_status": payload.get("payment_status", "por_pagar"),
@@ -1241,7 +1380,8 @@ def create_sale(payload: dict, actor: dict = Depends(require_permission("SALES_C
             conn.commit()
             rbac.audit(actor["id"], actor["email"], "create", "sales", sale_row["id"],
                        {"invoice": f"{sale_row.get('invoice_type')}-{sale_row.get('invoice_number')}",
-                        "total": float(sale_row.get("total") or 0)})
+                        "total": float(sale_row.get("total") or 0),
+                        "igv": float(sale_row.get("igv") or 0)})
             return _serialize_sale(sale_row)
         except HTTPException:
             conn.rollback()
@@ -1264,11 +1404,12 @@ def update_sale(sale_id: int, payload: dict, actor: dict = Depends(require_permi
         conn = db.get_conn()
         try:
             with conn.cursor() as cur:
+                venta = _preparar_venta(cur, payload, dict(existing))
                 invoice_number = payload.get("invoice_number") or existing["invoice_number"]
                 cur.execute(
                     "SELECT id FROM sales WHERE invoice_type = %s AND invoice_number = %s "
                     "AND NOT deleted AND id <> %s",
-                    (payload.get("invoice_type", existing["invoice_type"]), invoice_number, sale_id),
+                    (venta["invoice_type"], invoice_number, sale_id),
                 )
                 if cur.fetchone():
                     raise HTTPException(
@@ -1280,14 +1421,17 @@ def update_sale(sale_id: int, payload: dict, actor: dict = Depends(require_permi
                     "client_id": payload.get("client_id"),
                     "client_type": payload.get("client_type"),
                     "advisor_id": payload.get("advisor_id"),
-                    "with_igv": bool(payload.get("with_igv", existing["with_igv"])),
-                    "subtotal": payload.get("subtotal", existing["subtotal"]),
-                    "igv": payload.get("igv", existing["igv"]),
-                    "total": payload.get("total", existing["total"]),
-                    "discount_type": (payload.get("discount_type", existing.get("discount_type")) or None),
-                    "discount_value": payload.get("discount_value", existing.get("discount_value")) or 0,
-                    "discount_amount": payload.get("discount_amount", existing.get("discount_amount")) or 0,
-                    "invoice_type": payload.get("invoice_type", existing["invoice_type"]),
+                    # Importes: los recalcula el servidor, no vienen del cliente.
+                    "with_igv": venta["with_igv"],
+                    "subtotal": venta["subtotal"],
+                    "igv": venta["igv"],
+                    "total": venta["total"],
+                    "discount_type": venta["discount_type"],
+                    "discount_value": venta["discount_value"],
+                    "discount_amount": venta["discount_amount"],
+                    "fecha_emision": venta["fecha_emision"],
+                    "estado_fiscal": venta["estado_fiscal"],
+                    "invoice_type": venta["invoice_type"],
                     "invoice_number": invoice_number,
                     "payment_status": payload.get("payment_status", existing["payment_status"]),
                     "payment_description": payload.get("payment_description"),
@@ -1302,6 +1446,25 @@ def update_sale(sale_id: int, payload: dict, actor: dict = Depends(require_permi
                         data["payment_date"] = existing.get("payment_date") or date.today().isoformat()
                     else:
                         data["payment_date"] = None
+
+                # El importe pagado no puede superar el total recalculado.
+                if data["amount_paid"] in (None, ""):
+                    data["amount_paid"] = None
+                else:
+                    data["amount_paid"] = trib.r2(data["amount_paid"])
+                    if data["amount_paid"] < 0:
+                        raise HTTPException(status_code=400, detail="amount_paid no puede ser negativo")
+                    if data["amount_paid"] > venta["total"]:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"El importe pagado ({data['amount_paid']}) supera el total "
+                                   f"de la venta ({venta['total']})",
+                        )
+                if data["amount_pending"] in (None, ""):
+                    data["amount_pending"] = None
+                else:
+                    data["amount_pending"] = trib.r2(data["amount_pending"])
+
                 sets = ", ".join([f"{k} = %s" for k in data.keys()])
                 cur.execute(
                     f"UPDATE sales SET {sets} WHERE id = %s RETURNING *",
@@ -1330,7 +1493,8 @@ def update_sale(sale_id: int, payload: dict, actor: dict = Depends(require_permi
             conn.commit()
             rbac.audit(actor["id"], actor["email"], "update", "sales", sale_id,
                        {"invoice": f"{sale_row.get('invoice_type')}-{sale_row.get('invoice_number')}",
-                        "total": float(sale_row.get("total") or 0)})
+                        "total": float(sale_row.get("total") or 0),
+                        "igv": float(sale_row.get("igv") or 0)})
             return _serialize_sale(sale_row)
         except HTTPException:
             conn.rollback()
@@ -1340,6 +1504,83 @@ def update_sale(sale_id: int, payload: dict, actor: dict = Depends(require_permi
             raise HTTPException(status_code=400, detail=f"Error al actualizar la venta: {e}")
         finally:
             db.close_conn(conn)
+    return _conn_or_400(run)
+
+
+@app.post("/api/sales/{sale_id}/anular")
+def anular_sale(sale_id: int, payload: dict, actor: dict = Depends(require_permission("SALES_UPDATE"))):
+    """Anula un comprobante fiscal sin borrarlo.
+
+    Un comprobante anulado NO se contabiliza: sale del débito fiscal del IGV
+    y del ingreso neto del pago a cuenta. Se conserva el registro y su
+    número porque el correlativo no se reutiliza.
+    """
+    def run():
+        row = db.fetch_one("SELECT * FROM sales WHERE id = %s AND NOT deleted", (sale_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Venta no encontrada")
+        estado = str(payload.get("estado_fiscal") or "ANULADO").strip().upper()
+        if estado not in trib.ESTADOS_FISCALES:
+            raise HTTPException(
+                status_code=400,
+                detail="estado_fiscal inválido. Opciones: " + ", ".join(trib.ESTADOS_FISCALES),
+            )
+        if trib.norm_tipo_comprobante(row["invoice_type"]) not in trib.VENTAS_IGV_TIPOS and estado == "ANULADO":
+            raise HTTPException(
+                status_code=400,
+                detail="Solo las facturas y boletas tienen estado fiscal anulable",
+            )
+        motivo = (payload.get("motivo") or "").strip() or None
+        updated = db.execute(
+            "UPDATE sales SET estado_fiscal = %s WHERE id = %s RETURNING *",
+            (estado, sale_id),
+        )
+        rbac.audit(actor["id"], actor["email"], "anular", "sales", sale_id,
+                   {"estado_fiscal": estado, "motivo": motivo,
+                    "invoice": f"{row['invoice_type']}-{row['invoice_number']}"})
+        return _serialize_sale(dict(updated))
+    return _conn_or_400(run)
+
+
+@app.get("/api/sales/{sale_id}/fiscal")
+def fiscalidad_sale(sale_id: int, _: dict = Depends(require_permission("SALES_VIEW"))):
+    """Verifica la consistencia tributaria de un comprobante concreto."""
+    def run():
+        row = db.fetch_one("SELECT * FROM sales WHERE id = %s", (sale_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Venta no encontrada")
+        base, igv, total = trib.r2(row["subtotal"]), trib.r2(row["igv"]), trib.r2(row["total"])
+        tasa = trib.igv_rate()
+        igv_esperado = trib.r2(base * tasa) if row["with_igv"] else trib.r2(0)
+        es_fiscal = row["invoice_type"] in ("factura", "boleta")
+        alertas = []
+        if trib.r2(base + igv) != total:
+            alertas.append("La base imponible más el IGV no coincide con el total del documento.")
+        if row["with_igv"] and igv != igv_esperado:
+            alertas.append(
+                f"El IGV registrado ({igv}) no corresponde al {float(tasa) * 100:.0f}% "
+                f"de la base imponible ({igv_esperado}).")
+        if not row["with_igv"] and igv != 0:
+            alertas.append("El documento está marcado sin IGV pero registra IGV mayor que cero.")
+        if es_fiscal and row["estado_fiscal"] != "VALIDO":
+            alertas.append(f"El comprobante está en estado fiscal {row['estado_fiscal']}: no se contabiliza.")
+        if not es_fiscal and row["estado_fiscal"] == "VALIDO":
+            alertas.append(f"{row['invoice_type']} no es comprobante fiscal: no genera IGV ni pago a cuenta.")
+        return {
+            "id": row["id"],
+            "invoice_type": row["invoice_type"],
+            "invoice_number": row["invoice_number"],
+            "fecha_emision": row["fecha_emision"].isoformat() if row["fecha_emision"] else None,
+            "estado_fiscal": row["estado_fiscal"],
+            "es_comprobante_fiscal": es_fiscal,
+            "contabiliza": bool(es_fiscal and row["estado_fiscal"] == "VALIDO" and not row["deleted"]),
+            "subtotal": float(base),
+            "igv": float(igv),
+            "igv_esperado": float(igv_esperado),
+            "total": float(total),
+            "cuadra": trib.r2(base + igv) == total,
+            "alertas": alertas,
+        }
     return _conn_or_400(run)
 
 

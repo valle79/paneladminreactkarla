@@ -14,6 +14,13 @@ import { PaymentModal } from '../components/PaymentModal';
 const CURR_SYM = { PEN: 'S/', USD: 'US$', EUR: '€', CNY: 'CN¥' };
 const CURRENCIES = ['PEN', 'USD', 'EUR', 'CNY'];
 
+// Redondeo a 2 decimales: sin esto, 0.1+0.2 deja de cuadrar con el backend.
+const round2 = (n) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return Math.round((v + Number.EPSILON) * 100) / 100;
+};
+
 const fmtAmount = (v, cur = 'PEN') =>
   `${CURR_SYM[cur] || cur} ${Number(v || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -44,7 +51,16 @@ const DESTINO_MAP = {
   OTRO: ['gray', 'Otro'],
 };
 
-const TIPO_COMPROBANTE_OPTS = ['FACTURA', 'RECIBO DE LUZ', 'RECIBO DE AGUA', 'RECIBO DE GAS'];
+// Coincide con TIPO_COMPROBANTE del backend. Los que NO dan crédito fiscal se
+// pueden registrar igual: el backend los acepta y explica por qué no acreditan.
+const TIPO_COMPROBANTE_OPTS = [
+  'FACTURA', 'RECIBO DE LUZ', 'RECIBO DE AGUA', 'RECIBO DE GAS',
+  'BOLETA', 'RECIBO', 'NOTA DE VENTA', 'PROFORMA', 'OTRO',
+];
+const TIPO_COMPROBANTE_CREDITO = ['FACTURA', 'RECIBO DE LUZ', 'RECIBO DE AGUA', 'RECIBO DE GAS'];
+
+// Estados en los que la mercadería ya ingresó y el comprobante acredita IGV.
+const ESTADO_COMPRA_CREDITO = ['RECIBIDA_COMPLETA', 'RECIBIDA_PARCIAL'];
 
 const CONDICIONES_PAGO_OPTS = [
   { value: 'AL CONTADO', label: 'Al contado' },
@@ -439,13 +455,16 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
     return form.items.map((it) => {
       const cantidad = Math.max(0, Number(it.cantidad) || 0);
       const precio = Math.max(0, Number(it.precio_unitario) || 0);
-      const descuento = Math.max(0, Number(it.descuento) || 0);
-      const bruto = cantidad * precio;
-      const base = form.con_igv ? bruto * (1 - tasa) : bruto;
-      const subtotal = Math.max(0, base - descuento);
-      const impuesto = form.con_igv ? Math.max(0, bruto * tasa) : 0;
-      const total = subtotal + impuesto;
-      return { ...it, cantidad, precio, descuento, bruto, subtotal, impuesto, total };
+      const bruto = round2(cantidad * precio);
+      // El precio unitario se ingresa CON IGV. El descuento reduce el neto y
+      // el impuesto se recalcula sobre esa base: total === neto.
+      // Antes el impuesto se cobraba sobre el bruto y `total != base + impuesto`.
+      const descuento = Math.min(Math.max(0, Number(it.descuento) || 0), bruto);
+      const neto = round2(bruto - descuento);
+      const base = form.con_igv ? round2(neto / (1 + tasa)) : neto;
+      const impuesto = form.con_igv ? round2(neto - base) : 0;
+      const total = round2(base + impuesto);
+      return { ...it, cantidad, precio, descuento, bruto, neto, base, subtotal: base, impuesto, total };
     });
   }, [form, tasa]);
 
@@ -850,6 +869,32 @@ export default function Purchases({ tipo = 'NACIONAL' }) {
                   <label>Número</label>
                   <input className="input" placeholder="Ej. 00001234" value={form.numero_comprobante} onChange={(e) => setField('numero_comprobante', e.target.value)} />
                 </div>
+              </div>
+            )}
+
+            {!isIntl && !TIPO_COMPROBANTE_CREDITO.includes(form.tipo_comprobante) && (
+              <div className="badge badge-yellow" style={{ display: 'block', marginBottom: 12, padding: '8px 12px' }}>
+                <Icon name="high-priority" size={14} /> El comprobante <strong>{form.tipo_comprobante}</strong> se
+                registra, pero <strong>no genera crédito fiscal del IGV</strong>. Solo
+                {` ${TIPO_COMPROBANTE_CREDITO.join(', ')}`} acreditan el impuesto.
+              </div>
+            )}
+
+            {!isIntl && (
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label>
+                  Estado de recepción
+                  {ESTADO_COMPRA_CREDITO.includes(form.estado) && (
+                    <span className="badge badge-green" style={{ marginLeft: 8 }}>Acredita crédito fiscal</span>
+                  )}
+                </label>
+                {['ORDENADA', 'CONFIRMADA', 'EN_TRANSITO', 'BORRADOR'].includes(form.estado) && (
+                  <div className="badge badge-yellow" style={{ display: 'block', marginTop: 6, padding: '8px 12px' }}>
+                    <Icon name="high-priority" size={14} /> En estado <strong>{ESTADO_COMPRA_MAP[form.estado] || form.estado}</strong>{' '}
+                    la compra aún no genera crédito fiscal: pasa a
+                    {` ${ESTADO_COMPRA_CREDITO.join(' o ')}`} cuando la mercadería esté recibida.
+                  </div>
+                )}
               </div>
             )}
 

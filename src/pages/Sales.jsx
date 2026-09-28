@@ -15,12 +15,16 @@ import { COMPANY, formatDocNumber } from '../config';
 import { useAuth } from '../auth';
 import { exportSalesToExcel, filterBySearch, SALE_SEARCH_KEYS, downloadBlob, timestampName } from '../lib/exportSales';
 
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
 const emptySale = {
   client_type: 'dni',
   client_id: '',
   advisor_id: '',
   invoice_type: 'boleta',
   invoice_number: '',
+  fecha_emision: todayISO(),
+  estado_fiscal: 'VALIDO',
   with_igv: true,
   discount_type: '',
   discount_value: '',
@@ -31,6 +35,14 @@ const emptySale = {
   pending_payment_date: '',
   items: [],
 };
+
+// Estados fiscales: solo las facturas y boletas los tienen.
+const ESTADO_FISCAL_LABEL = {
+  VALIDO: { text: 'Válido', cls: 'badge-green' },
+  ANULADO: { text: 'Anulado', cls: 'badge-red' },
+  OBSERVADO: { text: 'Observado', cls: 'badge-yellow' },
+};
+const ES_COMPROBANTE_FISCAL = (t) => t === 'factura' || t === 'boleta';
 
 const TYPE_ORDER = { machine: 0, repuesto: 1, service: 2, manual: 3 };
 const IGV_RATE = 0.18;
@@ -206,6 +218,8 @@ export default function Sales() {
     advisor_id: form.advisor_id ? Number(form.advisor_id) : null,
     invoice_type: form.invoice_type,
     invoice_number: isProformaLike ? null : Number(form.invoice_number),
+    fecha_emision: form.fecha_emision || todayISO(),
+    estado_fiscal: form.estado_fiscal || 'VALIDO',
     with_igv: form.with_igv,
     subtotal: Number(subtotal.toFixed(2)),
     igv: Number(igv.toFixed(2)),
@@ -235,6 +249,9 @@ export default function Sales() {
     if (form.client_id === '__new__') return toast.warning('Completa los datos y crea el nuevo cliente para continuar');
     if (form.items.length === 0) return toast.warning('Agrega al menos un item');
     if (!isProformaLike && !form.invoice_number) return toast.warning('Indica el número de documento');
+    if (!form.fecha_emision) return toast.warning('Indica la fecha de emisión');
+    if (form.fecha_emision > todayISO())
+      return toast.warning('La fecha de emisión no puede ser futura');
     if (form.payment_status === 'a_cuenta' && (!form.amount_paid || Number(form.amount_paid) <= 0))
       return toast.warning('Indica el monto abonado');
     return true;
@@ -346,6 +363,8 @@ export default function Sales() {
       advisor_id: s.advisor_id || '',
       invoice_type: s.invoice_type,
       invoice_number: s.invoice_number || '',
+      fecha_emision: s.fecha_emision || todayISO(),
+      estado_fiscal: s.estado_fiscal || 'VALIDO',
       with_igv: !!s.with_igv,
       discount_type: s.discount_type || '',
       discount_value: s.discount_value ?? '',
@@ -535,15 +554,36 @@ export default function Sales() {
   };
 
   const remove = async (s) => {
+    const doc = `${s.invoice_type.toUpperCase()}-${String(s.invoice_number || '').padStart(7, '0')}`;
     const ok = await ask({
       title: 'Anular venta',
-      message: `¿Deseas anular la venta ${s.invoice_type.toUpperCase()}-${String(s.invoice_number || '').padStart(7, '0')}? Se ocultará del sistema.`,
+      message: `¿Deseas anular la venta ${doc}? Se ocultará del sistema.`,
       confirmText: 'Anular venta',
     });
     if (!ok) return;
     try {
       await api.delete(`/sales/${s.id}`);
       toast.success('Venta anulada');
+      load();
+    } catch (e) { toast.error(errMsg(e)); }
+  };
+
+  // Anulación FISCAL: la venta sigue existiendo pero deja de sumar IGV.
+  // Es distinto al borrado, y es lo que exige la contabilidad.
+  const anularFiscal = async (s) => {
+    const doc = `${s.invoice_type.toUpperCase()}-${String(s.invoice_number || '').padStart(7, '0')}`;
+    const ok = await ask({
+      title: 'Anular comprobante',
+      message: `¿Anular fiscalmente ${doc}? Pasará a estado ANULADO y dejará de sumar IGV en el período ${s.fecha_emision || ''}. El documento no se borra.`,
+      confirmText: 'Anular fiscalmente',
+    });
+    if (!ok) return;
+    try {
+      await api.post(`/sales/${s.id}/anular`, {
+        estado_fiscal: 'ANULADO',
+        motivo: 'Anulado desde el listado de ventas',
+      });
+      toast.success(`${doc} anulado. Ya no suma IGV.`);
       load();
     } catch (e) { toast.error(errMsg(e)); }
   };
@@ -786,7 +826,18 @@ export default function Sales() {
                 <tr key={s.id}>
                   <td data-label="Documento">
                     <InvoiceBadge type={s.invoice_type} number={s.invoice_number} />
-                    <div style={{ marginTop: 3 }}><DocTypeBadge type={s.invoice_type} /></div>
+                    <div style={{ marginTop: 3, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <DocTypeBadge type={s.invoice_type} />
+                      {ES_COMPROBANTE_FISCAL(s.invoice_type) && s.estado_fiscal
+                        && s.estado_fiscal !== 'VALIDO' && (
+                        <span className={`badge ${ESTADO_FISCAL_LABEL[s.estado_fiscal]?.cls || 'badge-gray'}`}>
+                          {ESTADO_FISCAL_LABEL[s.estado_fiscal]?.text || s.estado_fiscal}
+                        </span>
+                      )}
+                    </div>
+                    {s.fecha_emision && (
+                      <div className="text-muted" style={{ fontSize: 11.5 }}>Emitido {s.fecha_emision}</div>
+                    )}
                   </td>
                   <td data-label="Cliente" style={{ maxWidth: 240 }}>
                     <div className="cell-title">{s.client ? (s.client.names ? `${s.client.names} ${s.client.last_names || ''}` : s.client.razonsocial) : '—'}</div>
@@ -827,7 +878,14 @@ export default function Sales() {
                         <button className="btn-icon pay" onClick={() => markPaid(s)} title="Marcar como pagado"><Icon name="checkmark" size={14} /></button>
                       )}
                       {can('SALES_UPDATE') && <button className="btn-icon" onClick={() => openEdit(s)} title="Editar"><Icon name="edit" size={14} /></button>}
-                      {can('SALES_DELETE') && <button className="btn-icon danger" onClick={() => remove(s)} title="Anular"><Icon name="trash" size={14} /></button>}
+                      {ES_COMPROBANTE_FISCAL(s.invoice_type) && s.estado_fiscal === 'VALIDO'
+                        && can('SALES_UPDATE') && (
+                        <button className="btn-icon danger" onClick={() => anularFiscal(s)}
+                          title="Anular fiscalmente (deja de sumar IGV, no borra)">
+                          <Icon name="high-priority" size={14} />
+                        </button>
+                      )}
+                      {can('SALES_DELETE') && <button className="btn-icon danger" onClick={() => remove(s)} title="Eliminar"><Icon name="trash" size={14} /></button>}
                     </div>
                   </td>
                 </tr>
@@ -940,7 +998,7 @@ export default function Sales() {
           </div>
         ) : null}
 
-        <div className="grid-3">
+        <div className="grid-4">
           <div className="field">
             <label><Icon name="user-male" size={14} /> Asesor</label>
             <select className="select" value={form.advisor_id} onChange={(e) => setForm({ ...form, advisor_id: e.target.value })}>
@@ -965,6 +1023,31 @@ export default function Sales() {
               <input className="input" type="number" min="1" placeholder="Ej. 1001" value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} />
             )}
           </div>
+          <div className="field">
+            <label>
+              <Icon name="calendar" size={14} /> Fecha de emisión
+              {ES_COMPROBANTE_FISCAL(form.invoice_type) && (
+                <span className="badge badge-blue" style={{ marginLeft: 8 }}>Define el período del IGV</span>
+              )}
+            </label>
+            <input
+              className="input"
+              type="date"
+              value={form.fecha_emision || ''}
+              onChange={(e) => setForm({ ...form, fecha_emision: e.target.value })}
+            />
+            <div className="hint">No puede ser futura. El IGV se suma al mes de esta fecha, no al de creación.</div>
+          </div>
+          {ES_COMPROBANTE_FISCAL(form.invoice_type) && (
+            <div className="field">
+              <label>Estado fiscal</label>
+              <select className="select" value={form.estado_fiscal || 'VALIDO'} onChange={(e) => setForm({ ...form, estado_fiscal: e.target.value })}>
+                <option value="VALIDO">Válido — suma al IGV del período</option>
+                <option value="OBSERVADO">Observado — no suma al IGV</option>
+                <option value="ANULADO">Anulado — no suma al IGV</option>
+              </select>
+            </div>
+          )}
         </div>
 
         <label className="check" style={{ marginBottom: 12 }}>

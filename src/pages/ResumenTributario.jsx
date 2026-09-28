@@ -20,6 +20,16 @@ const REGIMEN_LABEL = {
 
 const der = (v) => (v == null ? 0 : Number(v));
 
+const CATEGORIA_LABEL = {
+  COMPRA_MERCADERIA: 'Compra de mercadería',
+  SERVICIOS: 'Servicios',
+  ALQUILER: 'Alquiler',
+  TRANSPORTE: 'Transporte',
+  SERVICIOS_PROFESIONALES: 'Servicios profesionales',
+  GASTOS_BANCARIOS: 'Gastos bancarios',
+  OTROS_GASTOS: 'Otros gastos',
+};
+
 export default function ResumenTributario() {
   const { user } = useAuth();
   const toast = useToast();
@@ -82,6 +92,9 @@ export default function ResumenTributario() {
   const detalle_ir = r.detalle_ir || {};
   const config = r.config || {};
   const annual = r.annual || [];
+  const ir_anual = r.ir_anual || {};
+  const gastosCat = r.gastos_deducibles_detalle || [];
+  const tramos = ir_anual.tramos || [];
 
   const mesSel = mes ?? null;
   const selectedKey = mesSel ? `${anio}-${String(mesSel).padStart(2, '0')}` : null;
@@ -201,6 +214,16 @@ export default function ResumenTributario() {
               </div>
             )}
 
+            {ir_anual.tramos_referencia && (
+              <div className="trib-error-banner">
+                <Icon name="high-priority" size={15} />
+                <span>
+                  <b>Tramos del IR anual no configurados.</b> {ir_anual.advertencia}{' '}
+                  El impuesto anual mostrado es referencial y no debe usarse para declarar.
+                </span>
+              </div>
+            )}
+
             {noInfo ? (
               <EmptyState
                 title="No existen ventas ni compras registradas"
@@ -252,7 +275,7 @@ export default function ResumenTributario() {
                   <span className="money">{fmtMoney(detalle_igv.igv_ventas)}</span>
                 </div>
                 <div className="line">
-                  <span className="text-muted">IGV de compras (crédito fiscal, solo FACTURAS)</span>
+                  <span className="text-muted">IGV de compras (crédito fiscal)</span>
                   <span className="money">{fmtMoney(detalle_igv.igv_compras)}</span>
                 </div>
                 <div className="line total">
@@ -267,8 +290,64 @@ export default function ResumenTributario() {
                 )}
               </div>
               <p className="small-note trib-note">
-                El IGV por pagar es la diferencia entre el IGV cobrado en ventas (facturas y boletas) y el IGV pagado en
-                compras que otorgan crédito fiscal (solo comprobantes FACTURA en estado confirmado o recibido).
+                El IGV por pagar es la diferencia entre el IGV cobrado en ventas
+                ({(config.ventas_igv_tipos || ['FACTURA', 'BOLETA']).join(' y ')} en estado fiscal VÁLIDO) y el IGV pagado
+                en compras que acreditan crédito fiscal
+                ({(config.compras_igv_tipos || ['FACTURA']).join(', ')} cuando la mercadería fue recibida).
+                Las proformas, cotizaciones, boletas y notas de venta de compra no acreditan IGV.
+              </p>
+            </div>
+
+            <div className="card card-pad">
+              <h3 className="trib-card-title">
+                <Icon name="document" size={17} style={{ color: 'var(--g-dark)' }} /> Declaración anual del IR
+              </h3>
+              <div className="sale-summary">
+                <div className="line">
+                  <span className="text-muted">Ingresos netos del año</span>
+                  <span className="money">{fmtMoney(ir_anual.ingresos_netos)}</span>
+                </div>
+                <div className="line">
+                  <span className="text-muted">(−) Gastos deducibles</span>
+                  <span className="money" style={{ color: 'var(--danger, #c0392b)' }}>
+                    −{fmtMoney(ir_anual.gastos_deducibles)}
+                  </span>
+                </div>
+                <div className="line">
+                  <span className="text-muted"><b>Renta neta</b></span>
+                  <span className="money"><b>{fmtMoney(ir_anual.renta_neta)}</b></span>
+                </div>
+                <div className="line">
+                  <span className="text-muted">UIT {anio}</span>
+                  <span className="money text-muted">{fmtMoney(ir_anual.valor_uit)}</span>
+                </div>
+                <div className="line">
+                  <span className="text-muted">Impuesto anual por tramos</span>
+                  <span className="money">{fmtMoney(ir_anual.impuesto_anual)}</span>
+                </div>
+                <div className="line">
+                  <span className="text-muted">(−) Pagos a cuenta del año</span>
+                  <span className="money" style={{ color: 'var(--danger, #c0392b)' }}>
+                    −{fmtMoney(ir_anual.pagos_a_cuenta)}
+                  </span>
+                </div>
+                <div className="line total">
+                  <span className="text-muted">
+                    <b>{ir_anual.resultado === 'A_FAVOR' ? 'Saldo a favor' : 'Saldo a pagar'}</b>
+                  </span>
+                  <span className="money"><b>{fmtMoney(ir_anual.saldo)}</b></span>
+                </div>
+              </div>
+              <p className="small-note trib-note">
+                Cálculo progresivo por tramos sobre la renta neta. El resultado{' '}
+                {ir_anual.tramos_referencia ? (
+                  <b className="text-danger">
+                    NO es oficial: se usan los tramos del Régimen General solo como referencia
+                  </b>
+                ) : (
+                  <b>corresponde a los tramos configurados para {regimenLabel}</b>
+                )}
+                .
               </p>
             </div>
 
@@ -289,18 +368,100 @@ export default function ResumenTributario() {
                   <span className="text-muted">Ingresos netos (base imponible)</span>
                   <span className="money">{fmtMoney(detalle_ir.ingresos_netos)}</span>
                 </div>
+                <div className="line">
+                  <span className="text-muted">Pago a cuenta calculado</span>
+                  <span className="money text-muted">{fmtMoney(detalle_ir.pago_cuenta_calculado)}</span>
+                </div>
+                <div className="line">
+                  <span className="text-muted">Pagado (registrado)</span>
+                  <span className="money">{fmtMoney(detalle_ir.pago_cuenta_pagado)}</span>
+                </div>
                 <div className="line total">
                   <span className="text-muted"><b>Pago a cuenta del IR</b></span>
                   <span className="money">{fmtMoney(detalle_ir.pago_cuenta)}</span>
                 </div>
               </div>
               <p className="small-note trib-note">
-                El pago a cuenta se estima multiplicando los ingresos netos (ventas de facturas y boletas, sin IGV) por la
-                tasa del régimen ({regimenLabel}, {tasaPct.toLocaleString('es-PE')}%). No equivale a un cálculo entre ventas y
-                compras.
+                El pago a cuenta se calcula sobre los ingresos netos del período ({regimenLabel},
+                {' '}{tasaPct.toLocaleString('es-PE')}%). Si registraste el pago a cuenta con su operación real, se muestra
+                el monto pagado; si no, se muestra el cálculo estimado. No es una liquidación anual: eso está en la
+                declaración del IR de abajo.
               </p>
             </div>
           </div>
+
+          {gastosCat.length > 0 && (
+            <div className="card card-pad">
+              <h3 className="trib-card-title">
+                <Icon name="document" size={17} style={{ color: 'var(--g-dark)' }} /> Gastos deducibles por categoría
+              </h3>
+              <div className="table-wrap">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Naturaleza del gasto</th>
+                      <th style={{ textAlign: 'right' }}>Documentos</th>
+                      <th style={{ textAlign: 'right' }}>Importe</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gastosCat.map((g) => (
+                      <tr key={g.categoria}>
+                        <td>{CATEGORIA_LABEL[g.categoria] || g.categoria}</td>
+                        <td className="money">{g.count}</td>
+                        <td className="money"><b>{fmtMoney(g.total)}</b></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td><b>Total deducible</b></td>
+                      <td className="money"><b>{gastosCat.reduce((a, g) => a + g.count, 0)}</b></td>
+                      <td className="money"><b>{fmtMoney(resumen.gastos_deducibles)}</b></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="small-note trib-note">
+                Solo los gastos que registras explícitamente con su naturaleza y sustento. No se derivan de las compras:
+                la mercadería no vendida, las existencias y los gastos no admitidos no pueden deducirse automáticamente.
+              </p>
+            </div>
+          )}
+
+          {tramos.length > 0 && (
+            <div className="card card-pad">
+              <h3 className="trib-card-title">
+                <Icon name="bar-chart" size={17} style={{ color: 'var(--g-dark)' }} />
+                Tramos del impuesto anual {ir_anual.tramos_referencia ? '(solo referencia)' : ''}
+              </h3>
+              <div className="table-wrap">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Tramo</th>
+                      <th style={{ textAlign: 'right' }}>Base imponible</th>
+                      <th style={{ textAlign: 'right' }}>Tasa</th>
+                      <th style={{ textAlign: 'right' }}>Impuesto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tramos.map((t, i) => (
+                      <tr key={i}>
+                        <td>
+                          {t.desde_uit != null ? `${t.desde_uit} UIT` : 'Desde 0 UIT'}
+                          {t.hasta_uit != null ? ` hasta ${t.hasta_uit} UIT` : ' en adelante'}
+                        </td>
+                        <td className="money">{fmtMoney(t.base_soles)}</td>
+                        <td className="money">{(der(t.tasa) * 100).toLocaleString('es-PE')}%</td>
+                        <td className="money"><b>{fmtMoney(t.impuesto)}</b></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="card card-pad trib-chart-card">
             <h3 className="trib-card-title">
