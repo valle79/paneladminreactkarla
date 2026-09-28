@@ -25,6 +25,7 @@ import storage
 import whatsapp
 import admin_users
 import purchases
+import resumen_tributario
 from auth import create_token, require_auth, get_current_user, require_permission
 import password as pw
 
@@ -65,6 +66,7 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.include_router(admin_users.router)
 app.include_router(purchases.router)
+app.include_router(resumen_tributario.router)
 
 
 @app.on_event("startup")

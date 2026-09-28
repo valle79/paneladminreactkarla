@@ -1604,6 +1604,161 @@ table.data tbody tr:last-child td { border-bottom: none; }
   print-color-adjust: exact;
 }
 
+/* Reporte del Resumen Tributario (A4 vertical) */
+.trib-report {
+  width: 794px;
+  padding: 26px 28px;
+}
+.trib-report .sr-meta-item { flex: 0 1 180px; }
+
+/* ============ RESUMEN TRIBUTARIO (página) ============ */
+.trib-page { padding-bottom: 8px; }
+.trib-head { align-items: flex-start; flex-wrap: wrap; }
+.trib-title { display: flex; align-items: center; gap: 8px; }
+
+.trib-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.trib-filters-inner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.trib-filters-inner .select { min-width: 132px; }
+.trib-filter-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Toda tarjeta indica a qué período corresponde el valor mostrado */
+.trib-card-period {
+  margin-top: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.trib-details { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+.trib-card-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.trib-note { margin-top: 12px; }
+
+.trib-chart-card { padding: 18px; margin-bottom: 20px; }
+
+/* Fila del mes seleccionado (el período elegido en el selector) */
+.trib-row-active {
+  background: #f2f8f4;
+  box-shadow: inset 4px 0 0 var(--g-primary);
+}
+.trib-row-active:hover { background: #eaf4ee !important; }
+.trib-row-active td { font-weight: 600; color: var(--g-dark); }
+
+.trib-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: #14532d;
+  background: #ddede2;
+  border-radius: 999px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.trib-table tfoot td {
+  background: var(--g-soft);
+  border-top: 2px solid #cfe7d6;
+  font-weight: 600;
+  color: var(--g-dark);
+}
+.trib-table tfoot td b { font-variant-numeric: tabular-nums; }
+
+.trib-disclaimer { margin-top: 14px; padding-top: 4px; }
+.trib-sunat { margin-top: 6px; font-weight: 600; color: var(--g-dark); }
+
+/* Recarga "en caliente": solo se atenúa lo dinámico, el encabezado sigue estático */
+.trib-content { transition: opacity 0.2s ease; }
+.trib-content.is-busy { opacity: 0.55; pointer-events: none; }
+
+.trib-pill-loading { display: inline-flex; align-items: center; gap: 7px; }
+.trib-pill-loading .spinner { border-color: rgba(29, 122, 51, 0.25); border-top-color: var(--g-primary); }
+
+.trib-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fdeaea;
+  border: 1px solid #f5c6c0;
+  color: var(--danger, #c0392b);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 1100px) {
+  .trib-filters { width: 100%; justify-content: space-between; }
+}
+
+@media (max-width: 720px) {
+  .trib-details { grid-template-columns: 1fr; }
+  .trib-head { gap: 14px; }
+  .trib-filters { flex-direction: column; align-items: stretch; width: 100%; }
+  .trib-filters-inner { width: 100%; }
+  .trib-filters-inner .select { flex: 1; min-width: 0; }
+  .trib-filter-actions { width: 100%; }
+  .trib-filter-actions .btn { flex: 1; }
+  .trib-filter-actions .pill-count { margin-left: auto; }
+
+  /* Total del período → tarjeta destacada en mobile */
+  .trib-table-wrap { background: transparent; border: 0; box-shadow: none; }
+  .trib-table tfoot { display: block; margin-top: 10px; }
+  .trib-table tfoot tr {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    background: var(--g-dark);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .trib-table tfoot td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-width: 0;
+    padding: 5px 0;
+    border: none;
+    background: transparent;
+    color: #fff;
+    text-align: right;
+  }
+  .trib-table tfoot td::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: rgba(255, 255, 255, 0.6);
+    flex-shrink: 0;
+  }
+  /* Filas en tarjetas individuales */
+  .trib-table tbody tr {
+    background: #fff;
+    border: 1px solid rgba(19, 52, 35, 0.06);
+    box-shadow: var(--shadow);
+    border-radius: 14px;
+    margin-bottom: 8px;
+    padding: 14px 16px;
+  }
+  .trib-table tbody tr.trib-row-active {
+    border: 1.5px solid var(--g-primary);
+    box-shadow: 0 3px 14px rgba(29, 122, 51, 0.18), var(--shadow);
+  }
+  .trib-row-active td { font-weight: 600; }
+  .trib-chip { margin-left: 6px; }
+}
+
 .sr-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
 .sr-brand { display: flex; align-items: center; gap: 14px; }
 .sr-logo { width: 64px; height: auto; border-radius: 10px; }

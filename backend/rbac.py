@@ -116,6 +116,7 @@ PERMISSIONS = [
 
     ("ACCOUNTS_PAYABLE_VIEW", "accounts_payable", "Ver cuentas por pagar"),
     ("PURCHASE_REPORTS_VIEW", "reports", "Ver reportes de compras"),
+    ("RESUMEN_TRIBUTARIO_VIEW", "reports", "Ver el resumen tributario (IGV e IR)"),
 ]
 
 # Permisos de escritura (para protecciones especiales de SUPER_ADMIN)
@@ -153,6 +154,7 @@ ROLES = {
             + _crud("SUPPLIERS") + _crud("PURCHASES") + _crud("PURCHASE_ORDERS")
             + _crud("PURCHASE_RECEIPTS") + _crud("SUPPLIER_PAYMENTS")
             + _crud("IMPORTS") + _crud("IMPORT_COSTS") + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW"]
+            + ["RESUMEN_TRIBUTARIO_VIEW"]
         ),
     },
     "COMPRAS": {
@@ -166,7 +168,7 @@ ROLES = {
             + _crud("SUPPLIERS") + _crud("PURCHASES") + _crud("PURCHASE_ORDERS")
             + _crud("PURCHASE_RECEIPTS") + _crud("SUPPLIER_PAYMENTS")
             + _crud("IMPORTS") + _crud("IMPORT_COSTS")
-            + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW"]
+            + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW", "RESUMEN_TRIBUTARIO_VIEW"]
         ),
     },
     "ALMACEN": {
@@ -190,7 +192,7 @@ ROLES = {
             + ["SUPPLIERS_VIEW", "PURCHASES_VIEW", "PURCHASE_ORDERS_VIEW", "PURCHASE_RECEIPTS_VIEW"]
             + ["SUPPLIER_PAYMENTS_VIEW", "SUPPLIER_PAYMENTS_CREATE", "SUPPLIER_PAYMENTS_UPDATE"]
             + ["IMPORTS_VIEW", "IMPORT_COSTS_VIEW"]
-            + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW"]
+            + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW", "RESUMEN_TRIBUTARIO_VIEW"]
         ),
     },
     "GERENCIA": {
@@ -202,6 +204,7 @@ ROLES = {
             + ["SUPPLIERS_VIEW", "PURCHASES_VIEW", "PURCHASE_ORDERS_VIEW", "PURCHASE_RECEIPTS_VIEW"]
             + ["SUPPLIER_PAYMENTS_VIEW", "IMPORTS_VIEW", "IMPORT_COSTS_VIEW"]
             + ["ACCOUNTS_PAYABLE_VIEW", "PURCHASE_REPORTS_VIEW", "PRODUCTS_VIEW", "SPARE_PARTS_VIEW"]
+            + ["RESUMEN_TRIBUTARIO_VIEW"]
         ),
     },
     "EDITOR_WEB": {

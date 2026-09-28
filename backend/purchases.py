@@ -148,7 +148,7 @@ def _history(conn, cur, purchase_id, evento, previo, nuevo, descripcion, actor, 
 # CONFIGURACIÓN TRIBUTARIA (centralizada en settings)
 # ============================================================================
 
-_SETTINGS_WHITELIST = {"igv_rate", "igv_name", "base_currency", "purchase_prefix"}
+_SETTINGS_WHITELIST = {"igv_rate", "igv_name", "base_currency", "purchase_prefix", "ir_regime", "ir_rate"}
 
 
 def _get_setting(key, default):
@@ -162,7 +162,7 @@ def _parse_setting(key, value, default):
     if value is None:
         return default
     try:
-        if key in ("igv_rate",):
+        if key in ("igv_rate", "ir_rate"):
             return float(value)
         if key in ("igv_enabled", "purchase_require_order"):
             return str(value).lower() in ("1", "true", "yes", "si")
@@ -178,6 +178,8 @@ def _settings_dict():
         "igv_name": "IGV",
         "base_currency": "PEN",
         "purchase_prefix": "CP",
+        "ir_regime": "RMT",
+        "ir_rate": 0.01,
     }
     for r in rows:
         if r["key"] in out:
