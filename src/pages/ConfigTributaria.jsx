@@ -2,20 +2,20 @@
 import Icon from '../components/Icon';
 import { api, errMsg } from '../api';
 import { useToast } from '../components/Toast';
-import { Modal, ConfirmModal, useConfirm } from '../components/Modal';
+import { Modal, useConfirm } from '../components/Modal';
 import { Loader, ErrorState, EmptyState, fmtMoney, fmtDate, Badge, useListReload } from '../components/ui';
 import { Pagination } from '../components/Pagination';
 import { useAuth } from '../auth';
 
 /* ============================================================
-   ConfiguraciÃ³n tributaria: gastos deducibles, pagos a cuenta
-   del IR, UIT por aÃ±o y tramos del IR anual.
+   Configuración tributaria: gastos deducibles, pagos a cuenta
+   del IR, UIT por año y tramos del IR anual.
    ============================================================ */
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 const CATEGORIAS = [
-  ['COMPRA_MERCADERIA', 'Compra de mercaderÃ­a'],
+  ['COMPRA_MERCADERIA', 'Compra de mercadería'],
   ['SERVICIOS', 'Servicios'],
   ['ALQUILER', 'Alquiler'],
   ['TRANSPORTE', 'Transporte'],
@@ -26,7 +26,7 @@ const CATEGORIAS = [
 
 const ESTADOS_GASTO = [
   ['BORRADOR', 'Borrador', 'gray'],
-  ['VALIDO', 'VÃ¡lido', 'green'],
+  ['VALIDO', 'Válido', 'green'],
   ['ANULADO', 'Anulado', 'red'],
 ];
 
@@ -38,7 +38,7 @@ const ESTADOS_PAGO = [
 
 const REGIMENES = [
   ['RMT', 'RMT (MYPE Tributario)'],
-  ['GENERAL', 'RÃ©gimen General'],
+  ['GENERAL', 'Régimen General'],
   ['NRUS', 'Nuevo RUS'],
 ];
 
@@ -73,15 +73,15 @@ export default function ConfigTributaria() {
 
   return (
     <div>
-      <ConfirmDialog />
+      {ConfirmDialog}
       <div className="page-head">
         <div>
           <h1 className="flex">
-            <Icon name="document" size={20} /> ConfiguraciÃ³n tributaria
+            <Icon name="document" size={20} /> Configuración tributaria
           </h1>
           <p className="text-muted">
             Registra los gastos deducibles, los pagos a cuenta del IR, el valor de la UIT y los tramos del
-            impuesto anual. El resumen tributario usa estos datos como fuente oficial del cÃ¡lculo.
+            impuesto anual. El resumen tributario usa estos datos como fuente oficial del cálculo.
           </p>
         </div>
         {tab !== 'gastos' && (
@@ -178,7 +178,7 @@ function GastosDeducibles({ anio, setAnio, years, puedeEditar, toast, ask }) {
   };
 
   const remove = async (g) => {
-    const ok = await ask({ message: `Â¿Eliminar el gasto "${g.descripcion}" por ${fmtMoney(g.monto_pen)}?` });
+    const ok = await ask({ message: `¿Eliminar el gasto "${g.descripcion}" por ${fmtMoney(g.monto_pen)}?` });
     if (!ok) return;
     try {
       await api.delete(`/gastos-deducibles/${g.id}`);
@@ -199,7 +199,7 @@ function GastosDeducibles({ anio, setAnio, years, puedeEditar, toast, ask }) {
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
         <select className="select" style={{ width: 'auto' }} value={categoria} onChange={(e) => { setPage(1); setCategoria(e.target.value); }}>
-          <option value="">Todas las categorÃ­as</option>
+          <option value="">Todas las categorías</option>
           {CATEGORIAS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
         </select>
         <select className="select" style={{ width: 'auto' }} value={estado} onChange={(e) => { setPage(1); setEstado(e.target.value); }}>
@@ -209,7 +209,7 @@ function GastosDeducibles({ anio, setAnio, years, puedeEditar, toast, ask }) {
         <span className="pill-count">{data.pagination.total} registros</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="text-muted" style={{ fontSize: 12.5 }}>
-            Total vÃ¡lido: <b className="money" style={{ color: 'var(--g-forest)' }}>{fmtMoney(data.total_valido)}</b>
+            Total válido: <b className="money" style={{ color: 'var(--g-forest)' }}>{fmtMoney(data.total_valido)}</b>
           </span>
           {puedeEditar && (
             <button className="btn btn-primary" onClick={() => setForm({ ...GASTO_VACIO, fecha_gasto: `${anio}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`.slice(0, 10) })}>
@@ -225,8 +225,8 @@ function GastosDeducibles({ anio, setAnio, years, puedeEditar, toast, ask }) {
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>CategorÃ­a</th>
-                <th>DescripciÃ³n</th>
+                <th>Categoría</th>
+                <th>Descripción</th>
                 <th>Documento</th>
                 <th className="num">Monto</th>
                 <th className="num">Total (S/)</th>
@@ -267,7 +267,7 @@ function GastosDeducibles({ anio, setAnio, years, puedeEditar, toast, ask }) {
             </tbody>
           </table>
         </div>
-        {data.items.length === 0 && <EmptyState title="Sin gastos deducibles" hint="Registra los gastos que sustentan la declaraciÃ³n anual." />}
+        {data.items.length === 0 && <EmptyState title="Sin gastos deducibles" hint="Registra los gastos que sustentan la declaración anual." />}
       </div>
 
       <Pagination
@@ -298,18 +298,18 @@ function GastosDeducibles({ anio, setAnio, years, puedeEditar, toast, ask }) {
               <div className="field">
                 <label className="label">Fecha del gasto *</label>
                 <input className="input" type="date" value={form.fecha_gasto} onChange={set('fecha_gasto')} />
-                <div className="hint">El aÃ±o y el mes se derivan de esta fecha.</div>
+                <div className="hint">El año y el mes se derivan de esta fecha.</div>
               </div>
               <div className="field">
-                <label className="label">CategorÃ­a *</label>
+                <label className="label">Categoría *</label>
                 <select className="select" value={form.categoria} onChange={set('categoria')}>
                   {CATEGORIAS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
                 </select>
               </div>
             </div>
             <div className="field">
-              <label className="label">DescripciÃ³n *</label>
-              <input className="input" value={form.descripcion} onChange={set('descripcion')} placeholder="Ej. Alquiler del local â€” julio" />
+              <label className="label">Descripción *</label>
+              <input className="input" value={form.descripcion} onChange={set('descripcion')} placeholder="Ej. Alquiler del local — julio" />
             </div>
             <div className="grid-3">
               <div className="field">
@@ -319,14 +319,14 @@ function GastosDeducibles({ anio, setAnio, years, puedeEditar, toast, ask }) {
               <div className="field">
                 <label className="label">Tipo de documento</label>
                 <select className="select" value={form.documento_tipo || ''} onChange={set('documento_tipo')}>
-                  <option value="">â€”</option>
+                  <option value="">—</option>
                   {['FACTURA', 'BOLETA', 'RECIBO DE LUZ', 'RECIBO DE AGUA', 'RECIBO DE GAS', 'NOTA DE VENTA', 'OTRO'].map((v) => (
                     <option key={v} value={v}>{v}</option>
                   ))}
                 </select>
               </div>
               <div className="field">
-                <label className="label">NÂº de documento</label>
+                <label className="label">Nº de documento</label>
                 <input className="input" value={form.documento_numero || ''} onChange={set('documento_numero')} />
               </div>
             </div>
@@ -335,7 +335,7 @@ function GastosDeducibles({ anio, setAnio, years, puedeEditar, toast, ask }) {
                 <label className="label">Moneda</label>
                 <select className="select" value={form.moneda} onChange={set('moneda')}>
                   <option value="PEN">Soles</option>
-                  <option value="USD">DÃ³lares</option>
+                  <option value="USD">Dólares</option>
                   <option value="EUR">Euros</option>
                 </select>
               </div>
@@ -369,7 +369,7 @@ function GastosDeducibles({ anio, setAnio, years, puedeEditar, toast, ask }) {
               <select className="select" value={form.estado} onChange={set('estado')}>
                 {ESTADOS_GASTO.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
               </select>
-              <div className="hint">Solo los gastos en estado VÃ¡lido se descuentan en la declaraciÃ³n anual.</div>
+              <div className="hint">Solo los gastos en estado Válido se descuentan en la declaración anual.</div>
             </div>
             <div className="field">
               <label className="label">Observaciones</label>
@@ -433,7 +433,7 @@ function PagosCuenta({ anio, puedeEditar, toast, ask }) {
   const remove = async (p) => {
     const ok = await ask({
       title: 'Eliminar pago a cuenta',
-      message: `Â¿Eliminar el pago a cuenta de ${p.mes_nombre} ${anio}?`,
+      message: `¿Eliminar el pago a cuenta de ${p.mes_nombre} ${anio}?`,
     });
     if (!ok) return;
     try {
@@ -528,7 +528,7 @@ function PagosCuenta({ anio, puedeEditar, toast, ask }) {
       <Modal
         open={!!form}
         onClose={() => setForm(null)}
-        title={form?.pago_cuenta_id ? `Editar pago â€” ${form.mes_nombre} ${anio}` : `Registrar pago â€” ${form?.mes_nombre || ''} ${anio}`}
+        title={form?.pago_cuenta_id ? `Editar pago — ${form.mes_nombre} ${anio}` : `Registrar pago — ${form?.mes_nombre || ''} ${anio}`}
         icon={<Icon name="money" size={18} />}
         footer={
           <>
@@ -550,7 +550,7 @@ function PagosCuenta({ anio, puedeEditar, toast, ask }) {
               <div className="field">
                 <label className="label">Tasa *</label>
                 <input className="input" type="number" min="0" step="0.0001" value={form.tasa} onChange={set('tasa')} />
-                <div className="hint">FracciÃ³n: 0.01 = 1%.</div>
+                <div className="hint">Fracción: 0.01 = 1%.</div>
               </div>
               <div className="field">
                 <label className="label">Monto calculado</label>
@@ -576,7 +576,7 @@ function PagosCuenta({ anio, puedeEditar, toast, ask }) {
                 <div className="hint">Obligatoria si el estado es Pagado.</div>
               </div>
               <div className="field">
-                <label className="label">NÂº de operaciÃ³n</label>
+                <label className="label">Nº de operación</label>
                 <input className="input" value={form.numero_operacion} onChange={set('numero_operacion')} />
               </div>
               <div className="field">
@@ -596,7 +596,7 @@ function PagosCuenta({ anio, puedeEditar, toast, ask }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* UIT por aÃ±o                                                         */
+/* UIT por año                                                         */
 /* ------------------------------------------------------------------ */
 
 function Uit({ anio, puedeEditar, toast, ask }) {
@@ -644,9 +644,9 @@ function Uit({ anio, puedeEditar, toast, ask }) {
           <table className="data">
             <thead>
               <tr>
-                <th>AÃ±o</th>
+                <th>Año</th>
                 <th className="num">Valor de la UIT (S/)</th>
-                <th>DescripciÃ³n</th>
+                <th>Descripción</th>
                 {puedeEditar && <th />}
               </tr>
             </thead>
@@ -655,7 +655,7 @@ function Uit({ anio, puedeEditar, toast, ask }) {
                 <tr key={u.anio}>
                   <td className="cell-title">
                     {u.anio}
-                    {u.anio === new Date().getFullYear() && <span className="text-muted" style={{ fontSize: 12 }}> Â· vigente</span>}
+                    {u.anio === new Date().getFullYear() && <span className="text-muted" style={{ fontSize: 12 }}> · vigente</span>}
                   </td>
                   <td className="money" style={{ fontWeight: 700 }}>{fmtMoney(u.valor_uit)}</td>
                   <td className="text-muted">{u.descripcion || '-'}</td>
@@ -677,7 +677,7 @@ function Uit({ anio, puedeEditar, toast, ask }) {
             </tbody>
           </table>
         </div>
-        {data.items.length === 0 && <EmptyState title="Sin UIT configuradas" hint="Registra el valor de la UIT de cada aÃ±o para el cÃ¡lculo del IR anual." />}
+        {data.items.length === 0 && <EmptyState title="Sin UIT configuradas" hint="Registra el valor de la UIT de cada año para el cálculo del IR anual." />}
       </div>
 
       {!byYear.has(anio) && (
@@ -716,11 +716,11 @@ function Uit({ anio, puedeEditar, toast, ask }) {
             <div className="field">
               <label className="label">Valor de la UIT (S/) *</label>
               <input className="input" type="number" min="0" step="0.01" value={form.valor_uit} onChange={(e) => setForm((f) => ({ ...f, valor_uit: e.target.value }))} />
-              <div className="hint">Valor vigente de la Unidad Impositiva Tributaria para ese aÃ±o.</div>
+              <div className="hint">Valor vigente de la Unidad Impositiva Tributaria para ese año.</div>
             </div>
             <div className="field">
-              <label className="label">DescripciÃ³n</label>
-              <input className="input" value={form.descripcion} onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))} placeholder="Ej. UIT 2026 â€” Ley NÂ° ..." />
+              <label className="label">Descripción</label>
+              <input className="input" value={form.descripcion} onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))} placeholder="Ej. UIT 2026 — Ley N° ..." />
             </div>
           </>
         )}
@@ -777,7 +777,7 @@ function TramosIr({ puedeEditar, toast, ask }) {
 
   const remove = async (t) => {
     const ok = await ask({
-      message: `Â¿Eliminar el tramo de ${t.desde_uit} a ${t.hasta_uit ?? 'âˆž'} UIT en ${label(REGIMENES, t.regimen, 0)}?`,
+      message: `¿Eliminar el tramo de ${t.desde_uit} a ${t.hasta_uit ?? '∞'} UIT en ${label(REGIMENES, t.regimen, 0)}?`,
     });
     if (!ok) return;
     try {
@@ -832,7 +832,7 @@ function TramosIr({ puedeEditar, toast, ask }) {
                     <th className="num">Desde (UIT)</th>
                     <th className="num">Hasta (UIT)</th>
                     <th className="num">Tasa</th>
-                    <th>DescripciÃ³n</th>
+                    <th>Descripción</th>
                     {puedeEditar && <th />}
                   </tr>
                 </thead>
@@ -879,7 +879,7 @@ function TramosIr({ puedeEditar, toast, ask }) {
         {form && (
           <>
             <div className="field">
-              <label className="label">RÃ©gimen *</label>
+              <label className="label">Régimen *</label>
               <select className="select" value={form.regimen} onChange={set('regimen')}>
                 {REGIMENES.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
               </select>
@@ -892,16 +892,16 @@ function TramosIr({ puedeEditar, toast, ask }) {
               <div className="field">
                 <label className="label">Hasta (UIT)</label>
                 <input className="input" type="number" min="0" step="0.001" value={form.hasta_uit} onChange={set('hasta_uit')} />
-                <div className="hint">VacÃ­o = sin lÃ­mite.</div>
+                <div className="hint">Vacío = sin límite.</div>
               </div>
               <div className="field">
                 <label className="label">Tasa *</label>
                 <input className="input" type="number" min="0" max="1" step="0.001" value={form.tasa} onChange={set('tasa')} placeholder="0.10" />
-                <div className="hint">FracciÃ³n: 0.10 = 10%.</div>
+                <div className="hint">Fracción: 0.10 = 10%.</div>
               </div>
             </div>
             <div className="field">
-              <label className="label">DescripciÃ³n</label>
+              <label className="label">Descripción</label>
               <input className="input" value={form.descripcion} onChange={set('descripcion')} />
             </div>
           </>
