@@ -22,6 +22,7 @@ import consulta_docs
 import db
 import rbac
 import storage
+import supabase_sync
 import whatsapp
 import admin_users
 import purchases
@@ -78,6 +79,13 @@ def _startup_seed():
         rbac.seed_roles()
     except Exception:
         # En un entorno sin las tablas RBAC aún, no bloqueamos el arranque.
+        pass
+
+    # Reintenta en segundo plano los cambios del catálogo que no pudieron
+    # replicarse en Supabase en su momento.
+    try:
+        supabase_sync.ensure_worker()
+    except Exception:
         pass
 
 
@@ -391,12 +399,12 @@ class SoftDeleteMixin:
 
     def soft_delete(self, item_id):
         self.get(item_id)
-        db.execute(f"UPDATE {self.table} SET deleted = true WHERE id = %s", (item_id,), returning=None)
-        return {"ok": True}
+        row = db.execute(f"UPDATE {self.table} SET deleted = true WHERE id = %s RETURNING *", (item_id,))
+        return {"ok": True, "item": self.hydrate(dict(row)) if row else None}
 
     def restore(self, item_id):
-        db.execute(f"UPDATE {self.table} SET deleted = false WHERE id = %s", (item_id,), returning=None)
-        return {"ok": True}
+        row = db.execute(f"UPDATE {self.table} SET deleted = false WHERE id = %s RETURNING *", (item_id,))
+        return {"ok": True, "item": self.hydrate(dict(row)) if row else None}
 
 
 # ============================================================================
@@ -419,6 +427,7 @@ def list_advisors(include_deleted: bool = False, page: int = 1, limit: int = 50,
 @app.post("/api/advisors")
 def create_advisor(payload: dict, actor: dict = Depends(require_permission("ADVISORS_CREATE"))):
     item = _conn_or_400(lambda: advisors_crud.create(payload))
+    supabase_sync.sync_row("advisors", item)
     rbac.audit(actor["id"], actor["email"], "create", "advisors", item["id"], {"name": payload.get("name")})
     return item
 
@@ -426,6 +435,7 @@ def create_advisor(payload: dict, actor: dict = Depends(require_permission("ADVI
 @app.put("/api/advisors/{item_id}")
 def update_advisor(item_id: int, payload: dict, actor: dict = Depends(require_permission("ADVISORS_UPDATE"))):
     item = _conn_or_400(lambda: advisors_crud.update(item_id, payload))
+    supabase_sync.sync_row("advisors", item)
     rbac.audit(actor["id"], actor["email"], "update", "advisors", item_id, {"name": payload.get("name")})
     return item
 
@@ -433,6 +443,7 @@ def update_advisor(item_id: int, payload: dict, actor: dict = Depends(require_pe
 @app.delete("/api/advisors/{item_id}")
 def delete_advisor(item_id: int, actor: dict = Depends(require_permission("ADVISORS_DELETE"))):
     res = _conn_or_400(lambda: advisors_crud.soft_delete(item_id))
+    supabase_sync.sync_row("advisors", res.get("item"))
     rbac.audit(actor["id"], actor["email"], "delete", "advisors", item_id, {})
     return res
 
@@ -440,6 +451,7 @@ def delete_advisor(item_id: int, actor: dict = Depends(require_permission("ADVIS
 @app.post("/api/advisors/{item_id}/restore")
 def restore_advisor(item_id: int, actor: dict = Depends(require_permission("ADVISORS_DELETE"))):
     res = _conn_or_400(lambda: advisors_crud.restore(item_id))
+    supabase_sync.sync_row("advisors", res.get("item"))
     rbac.audit(actor["id"], actor["email"], "restore", "advisors", item_id, {})
     return res
 
@@ -464,6 +476,7 @@ def list_products(include_deleted: bool = False, page: int = 1, limit: int = 50,
 @app.post("/api/products")
 def create_product(payload: dict, actor: dict = Depends(require_permission("PRODUCTS_CREATE"))):
     item = _conn_or_400(lambda: products_crud.create(payload))
+    supabase_sync.sync_row("machine_products", item)
     rbac.audit(actor["id"], actor["email"], "create", "products", item["id"], {"name": payload.get("name")})
     return item
 
@@ -471,6 +484,7 @@ def create_product(payload: dict, actor: dict = Depends(require_permission("PROD
 @app.put("/api/products/{item_id}")
 def update_product(item_id: int, payload: dict, actor: dict = Depends(require_permission("PRODUCTS_UPDATE"))):
     item = _conn_or_400(lambda: products_crud.update(item_id, payload))
+    supabase_sync.sync_row("machine_products", item)
     rbac.audit(actor["id"], actor["email"], "update", "products", item_id, {"name": payload.get("name")})
     return item
 
@@ -478,6 +492,7 @@ def update_product(item_id: int, payload: dict, actor: dict = Depends(require_pe
 @app.delete("/api/products/{item_id}")
 def delete_product(item_id: int, actor: dict = Depends(require_permission("PRODUCTS_DELETE"))):
     res = _conn_or_400(lambda: products_crud.soft_delete(item_id))
+    supabase_sync.sync_row("machine_products", res.get("item"))
     rbac.audit(actor["id"], actor["email"], "delete", "products", item_id, {})
     return res
 
@@ -485,6 +500,7 @@ def delete_product(item_id: int, actor: dict = Depends(require_permission("PRODU
 @app.post("/api/products/{item_id}/restore")
 def restore_product(item_id: int, actor: dict = Depends(require_permission("PRODUCTS_DELETE"))):
     res = _conn_or_400(lambda: products_crud.restore(item_id))
+    supabase_sync.sync_row("machine_products", res.get("item"))
     rbac.audit(actor["id"], actor["email"], "restore", "products", item_id, {})
     return res
 
@@ -509,6 +525,7 @@ def list_spare_parts(include_deleted: bool = False, page: int = 1, limit: int = 
 @app.post("/api/spare-parts")
 def create_spare_part(payload: dict, actor: dict = Depends(require_permission("SPARE_PARTS_CREATE"))):
     item = _conn_or_400(lambda: spare_parts_crud.create(payload))
+    supabase_sync.sync_row("spare_parts", item)
     rbac.audit(actor["id"], actor["email"], "create", "spare_parts", item["id"], {"name": payload.get("name")})
     return item
 
@@ -516,6 +533,7 @@ def create_spare_part(payload: dict, actor: dict = Depends(require_permission("S
 @app.put("/api/spare-parts/{item_id}")
 def update_spare_part(item_id: int, payload: dict, actor: dict = Depends(require_permission("SPARE_PARTS_UPDATE"))):
     item = _conn_or_400(lambda: spare_parts_crud.update(item_id, payload))
+    supabase_sync.sync_row("spare_parts", item)
     rbac.audit(actor["id"], actor["email"], "update", "spare_parts", item_id, {"name": payload.get("name")})
     return item
 
@@ -523,6 +541,7 @@ def update_spare_part(item_id: int, payload: dict, actor: dict = Depends(require
 @app.delete("/api/spare-parts/{item_id}")
 def delete_spare_part(item_id: int, actor: dict = Depends(require_permission("SPARE_PARTS_DELETE"))):
     res = _conn_or_400(lambda: spare_parts_crud.soft_delete(item_id))
+    supabase_sync.sync_row("spare_parts", res.get("item"))
     rbac.audit(actor["id"], actor["email"], "delete", "spare_parts", item_id, {})
     return res
 
@@ -530,6 +549,7 @@ def delete_spare_part(item_id: int, actor: dict = Depends(require_permission("SP
 @app.post("/api/spare-parts/{item_id}/restore")
 def restore_spare_part(item_id: int, actor: dict = Depends(require_permission("SPARE_PARTS_DELETE"))):
     res = _conn_or_400(lambda: spare_parts_crud.restore(item_id))
+    supabase_sync.sync_row("spare_parts", res.get("item"))
     rbac.audit(actor["id"], actor["email"], "restore", "spare_parts", item_id, {})
     return res
 
@@ -888,7 +908,7 @@ class PromotionMixin(SoftDeleteMixin):
     def soft_delete(self, item_id):
         self.get(item_id)
         db.execute("DELETE FROM promotions WHERE id = %s", (item_id,), returning=None)
-        return {"ok": True}
+        return {"ok": True, "id": item_id}
 
 
 promotions_crud = PromotionMixin()
@@ -911,6 +931,7 @@ def list_promotions(only_web: bool = False, page: int = 1, limit: int = 50, _: d
 @app.post("/api/promotions")
 def create_promotion(payload: dict, actor: dict = Depends(require_permission("PROMOTIONS_CREATE"))):
     item = _conn_or_400(lambda: promotions_crud.create(payload))
+    supabase_sync.sync_row("promotions", item)
     rbac.audit(actor["id"], actor["email"], "create", "promotions", item["id"], {"title": payload.get("title")})
     return item
 
@@ -918,6 +939,7 @@ def create_promotion(payload: dict, actor: dict = Depends(require_permission("PR
 @app.put("/api/promotions/{item_id}")
 def update_promotion(item_id: str, payload: dict, actor: dict = Depends(require_permission("PROMOTIONS_UPDATE"))):
     item = _conn_or_400(lambda: promotions_crud.update(item_id, payload))
+    supabase_sync.sync_row("promotions", item)
     rbac.audit(actor["id"], actor["email"], "update", "promotions", item_id, {"title": payload.get("title")})
     return item
 
@@ -925,7 +947,36 @@ def update_promotion(item_id: str, payload: dict, actor: dict = Depends(require_
 @app.delete("/api/promotions/{item_id}")
 def delete_promotion(item_id: str, actor: dict = Depends(require_permission("PROMOTIONS_DELETE"))):
     res = _conn_or_400(lambda: promotions_crud.soft_delete(item_id))
+    supabase_sync.delete_row("promotions", item_id)
     rbac.audit(actor["id"], actor["email"], "delete", "promotions", item_id, {})
+    return res
+
+
+# ============================================================================
+# SINCRONIZACIÓN NEON -> SUPABASE
+# ============================================================================
+
+@app.get("/api/sync/status")
+def sync_status(_: dict = Depends(require_permission("SETTINGS_VIEW"))):
+    """Compara el catálogo de Neon con el de Supabase y lista lo pendiente."""
+    return _conn_or_400(supabase_sync.status)
+
+
+@app.post("/api/sync/retry")
+def sync_retry(actor: dict = Depends(require_permission("SETTINGS_MANAGE"))):
+    """Reintenta ahora los cambios que quedaron pendientes de replicar."""
+    res = _conn_or_400(supabase_sync.drain_queue)
+    rbac.audit(actor["id"], actor["email"], "sync_retry", "supabase_sync", None, res)
+    return res
+
+
+@app.post("/api/sync/resync")
+def sync_resync(table: str, actor: dict = Depends(require_permission("SETTINGS_MANAGE"))):
+    """Reenvía a Supabase todas las filas de una tabla del catálogo."""
+    if table not in supabase_sync.CATALOG_TABLES:
+        raise HTTPException(status_code=400, detail=f"Tabla no sincronizable: {table}")
+    res = _conn_or_400(lambda: supabase_sync.resync_table(table))
+    rbac.audit(actor["id"], actor["email"], "sync_resync", table, None, res)
     return res
 
 
